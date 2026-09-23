@@ -103,14 +103,7 @@ func (a *App) handleMCPCall(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handleMCPProxy(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	token, ok := bearerToken(r.Header.Get("Authorization"))
-	if !ok {
-		a.writeBearerChallenge(w, id)
-		return
-	}
-	resource := a.baseURL + "/mcp/" + id
-	grant, err := a.oauth.ValidateAccessTokenForResource(token, resource)
-	if err != nil || !scopeContains(grant.Scope, "mcp:*") {
+	if _, err := a.authenticateMCPRequest(r, id); err != nil {
 		a.writeBearerChallenge(w, id)
 		return
 	}
@@ -154,7 +147,7 @@ func (a *App) invalidateProxy(id string) {
 func (a *App) writeBearerChallenge(w http.ResponseWriter, id string) {
 	metadata := a.baseURL + "/.well-known/oauth-protected-resource/mcp/" + id
 	w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+metadata+`", scope="mcp:*"`)
-	writeError(w, http.StatusUnauthorized, errors.New("valid OAuth bearer token with mcp:* scope is required"))
+	writeError(w, http.StatusUnauthorized, errors.New("valid OAuth token or MCP access credential with mcp:* scope is required"))
 }
 
 func bearerToken(value string) (string, bool) {

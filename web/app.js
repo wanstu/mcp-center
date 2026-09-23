@@ -1,5 +1,5 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),tools:new Map(),selectedTool:null,page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),tools:new Map(),selectedTool:null,accessSettings:null,credentials:[],page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
 const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
@@ -11,7 +11,7 @@ function clearError(node){node.textContent='';node.classList.add('hidden')}
 const mockData={mcps:[
 {id:'mcp_demo_adm',name:'pj-adm',transport:'streamable-http',auth_mode:'none',endpoint:'http://127.0.0.1:8001/mcp',default_include_in_environment:true},
 {id:'mcp_demo_db',name:'wm-test-db',transport:'stdio',auth_mode:'none',executable:'mysql-mcp',args:['--readonly'],default_include_in_environment:false}
-],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]}};
+],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},credentials:[]};
 
 async function api(path,options={}){
   if(state.mock)return mockApi(path,options);
@@ -28,6 +28,12 @@ async function mockApi(path,options){
   if(path==='/api/me')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/auth/login')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/auth/logout')return {ok:true};
+  if(path==='/api/access/settings'&&method==='GET')return {settings:mockData.accessSettings};
+  if(path==='/api/access/settings'&&method==='PUT'){mockData.accessSettings=JSON.parse(options.body);return {settings:mockData.accessSettings}}
+  if(path==='/api/access/credentials'&&method==='GET')return {credentials:mockData.credentials};
+  if(path==='/api/access/credentials'&&method==='POST'){const input=JSON.parse(options.body),secret='mcp_mock_'+Date.now(),item={id:'cred_'+Date.now(),secret_prefix:secret.slice(0,12),created_at:new Date().toISOString(),updated_at:new Date().toISOString(),last_used_at:null,...input};mockData.credentials.push(item);return {credential:item,secret}}
+  const cred=path.match(/^\/api\/access\/credentials\/([^/]+)$/);
+  if(cred){const id=cred[1];if(method==='DELETE'){mockData.credentials=mockData.credentials.filter(x=>x.id!==id);return {ok:true}}if(method==='PUT'){const input=JSON.parse(options.body),i=mockData.credentials.findIndex(x=>x.id===id);mockData.credentials[i]={...mockData.credentials[i],...input,updated_at:new Date().toISOString()};return {credential:mockData.credentials[i]}}}
   if(path==='/api/mcps'&&method==='GET')return {mcps:mockData.mcps};
   if(path==='/api/mcps'&&method==='POST'){const cfg=JSON.parse(options.body);const m={id:'mcp_'+Date.now(),...cfg};mockData.mcps.push(m);return {mcp:m}}
   const m=path.match(/^\/api\/mcps\/([^/]+)(?:\/(probe|tools|call))?$/);
@@ -65,7 +71,7 @@ function showAuth(setup){
 async function enterApp(){
   el('auth-screen').classList.add('hidden');el('app').classList.remove('hidden');
   el('me-name').textContent=state.user?.username||'admin';
-  await Promise.allSettled([loadMCPs(),loadOAuthMetadata()]);
+  await Promise.allSettled([loadMCPs(),loadOAuthMetadata(),loadAccess()]);
 }
 async function submitAuth(event){
   event.preventDefault();clearError(el('auth-error'));
@@ -83,6 +89,7 @@ function switchPage(page){
   document.querySelectorAll('.nav button[data-page]').forEach(n=>n.classList.toggle('active',n.dataset.page===page));
   el('page-'+page).classList.add('active');el('page-title').textContent=pageNames[page]||page;
   if(page==='tools')refreshToolMCPSelect();
+  if(page==='access')loadAccess().catch(error=>toast(error.message));
 }
 async function loadMCPs(){
   const result=await api('/api/mcps');state.mcps=result.mcps||[];renderMCPs();renderDashboard();refreshToolMCPSelect();
@@ -164,6 +171,61 @@ async function loadOAuthMetadata(){
   try{const meta=await api('/.well-known/oauth-authorization-server');const box=el('oauth-meta');box.innerHTML='';for(const key of ['issuer','authorization_endpoint','token_endpoint','registration_endpoint']){const line=document.createElement('div');line.innerHTML='<strong>'+escapeHTML(key)+'</strong><div class="muted">'+escapeHTML(meta[key]||'—')+'</div>';box.appendChild(line)}}
   catch(error){el('oauth-meta').innerHTML='<span class="form-error">'+escapeHTML(error.message)+'</span>'}
 }
+async function loadAccess(){
+  const [settingsResult,credentialsResult]=await Promise.all([api('/api/access/settings'),api('/api/access/credentials')]);
+  state.accessSettings=settingsResult.settings;state.credentials=credentialsResult.credentials||[];
+  el('setting-bearer').checked=Boolean(state.accessSettings.bearer_enabled);
+  el('setting-header').checked=Boolean(state.accessSettings.header_enabled);
+  el('setting-header-name').value=state.accessSettings.header_name||'X-MCP-Token';
+  el('setting-query').checked=Boolean(state.accessSettings.query_enabled);
+  el('setting-query-name').value=state.accessSettings.query_name||'mcp_token';
+  renderCredentials();
+}
+function renderCredentials(){
+  const body=el('credential-rows');body.innerHTML='';
+  for(const item of state.credentials){
+    const channels=[item.allow_bearer?'Bearer':'',item.allow_header?'Header':'',item.allow_query?'Query':''].filter(Boolean).join(' / ')||'—';
+    const scopes=(item.scopes||[]).join(' ')||'—';
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td><strong>'+escapeHTML(item.name)+'</strong></td><td><span class="muted">'+escapeHTML(item.secret_prefix||'')+'…</span></td><td>'+escapeHTML(channels)+'</td><td>'+escapeHTML(scopes)+'</td><td>'+(item.enabled?'<span class="status ok">启用</span>':'<span class="status">禁用</span>')+'</td><td class="muted">'+escapeHTML(item.last_used_at||'从未')+'</td><td><div class="row"><button class="button ghost small" data-edit>编辑</button><button class="button ghost small" data-delete>删除</button></div></td>';
+    tr.querySelector('[data-edit]').onclick=()=>openCredentialDialog(item);
+    tr.querySelector('[data-delete]').onclick=()=>deleteCredential(item);
+    body.appendChild(tr);
+  }
+  const empty=state.credentials.length===0;
+  body.closest('.table-wrap').classList.toggle('hidden',empty);
+  el('credential-empty').classList.toggle('hidden',!empty);
+}
+function openCredentialDialog(item=null){
+  el('credential-dialog-title').textContent=item?'编辑访问密钥':'创建访问密钥';
+  el('credential-id').value=item?.id||'';
+  el('credential-name').value=item?.name||'';
+  el('credential-enabled').checked=item?Boolean(item.enabled):true;
+  el('credential-bearer').checked=item?Boolean(item.allow_bearer):true;
+  el('credential-header').checked=item?Boolean(item.allow_header):true;
+  el('credential-query').checked=item?Boolean(item.allow_query):false;
+  el('credential-scopes').value=(item?.scopes||['mcp:*']).join(' ');
+  clearError(el('credential-form-error'));el('credential-dialog').showModal();
+}
+async function saveCredential(event){
+  event.preventDefault();clearError(el('credential-form-error'));
+  const id=el('credential-id').value.trim();
+  const payload={name:el('credential-name').value.trim(),enabled:el('credential-enabled').checked,allow_bearer:el('credential-bearer').checked,allow_header:el('credential-header').checked,allow_query:el('credential-query').checked,scopes:el('credential-scopes').value.split(/\s+/).filter(Boolean)};
+  try{
+    const result=await api(id?'/api/access/credentials/'+encodeURIComponent(id):'/api/access/credentials',{method:id?'PUT':'POST',body:JSON.stringify(payload)});
+    el('credential-dialog').close();await loadAccess();
+    if(!id&&result.secret){el('created-secret').textContent=result.secret;el('secret-dialog').showModal()}
+    else toast('访问密钥已更新');
+  }catch(error){showError(el('credential-form-error'),error)}
+}
+async function deleteCredential(item){
+  if(!confirm('删除访问密钥 “'+item.name+'”？'))return;
+  try{await api('/api/access/credentials/'+encodeURIComponent(item.id),{method:'DELETE'});await loadAccess();toast('访问密钥已删除')}catch(error){toast(error.message)}
+}
+async function saveAccessSettings(){
+  const payload={bearer_enabled:el('setting-bearer').checked,header_enabled:el('setting-header').checked,header_name:el('setting-header-name').value.trim(),query_enabled:el('setting-query').checked,query_name:el('setting-query-name').value.trim()};
+  try{const result=await api('/api/access/settings',{method:'PUT',body:JSON.stringify(payload)});state.accessSettings=result.settings;toast('授权设置已保存')}catch(error){toast(error.message)}
+}
 function escapeHTML(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
 document.addEventListener('click',event=>{
@@ -171,6 +233,7 @@ document.addEventListener('click',event=>{
   const link=event.target.closest('[data-page-link]')?.dataset.pageLink;if(link)switchPage(link);
   if(event.target.closest('[data-action="open-add"]'))openMCPDialog();
   if(event.target.closest('[data-action="close-dialog"]'))el('mcp-dialog').close();
+  if(event.target.closest('[data-action="close-credential-dialog"]'))el('credential-dialog').close();
 });
 el('auth-form').addEventListener('submit',submitAuth);
 el('logout').onclick=async()=>{try{await api('/api/auth/logout',{method:'POST'})}finally{state.user=null;showAuth(false)}};
@@ -181,4 +244,9 @@ el('mcp-transport').addEventListener('change',updateTransportFields);
 el('mcp-form').addEventListener('submit',saveMCP);
 el('tool-mcp').addEventListener('change',event=>loadTools(event.target.value));
 el('tool-call').onclick=callTool;
+el('add-credential').onclick=()=>openCredentialDialog();
+el('save-access-settings').onclick=saveAccessSettings;
+el('credential-form').addEventListener('submit',saveCredential);
+el('close-secret').onclick=()=>el('secret-dialog').close();
+el('copy-secret').onclick=async()=>{try{await navigator.clipboard.writeText(el('created-secret').textContent);toast('密钥已复制')}catch{toast('复制失败，请手动复制')}};
 bootstrap();

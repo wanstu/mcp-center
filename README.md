@@ -25,10 +25,11 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - MCP Token 与具体 Resource 绑定
 - Wails Desktop Kit Web UI 资源与主题
 - 可运行 CLI 服务入口
+- Static Access Credential：Bearer / Header / Query
+- 授权通道开关与 Header / Query 参数名配置
 
 开发中：
 
-- Static Access Credential：Bearer / Header / Query
 - 调用审计日志
 - MCP Import / Export
 - 更完整设置页面

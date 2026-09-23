@@ -121,11 +121,29 @@
       </section>
 
       <section id="page-access" class="page">
-        <div class="page-head"><div><h1>访问授权</h1><p>统一使用 OAuth、Bearer、Header 和 Query 访问 MCP Endpoint。</p></div></div>
-        <div class="grid-2">
-          <article class="panel"><h2>OAuth</h2><p class="muted">Authorization Code + PKCE S256。</p><div id="oauth-meta" class="stack mini"><span class="muted">读取 OAuth Metadata…</span></div></article>
-          <article class="panel"><h2>静态访问密钥</h2><p class="muted">Bearer / Header / Query 将共用 Access Credential。后端接口完成后在此管理。</p><div class="notice">Query 授权默认关闭，避免密钥进入 URL 日志、浏览器历史和 Referer。</div></article>
+        <div class="page-head"><div><h1>访问授权</h1><p>OAuth 与静态 Access Credential 共用同一 MCP Endpoint。</p></div><button id="add-credential" class="button primary">创建访问密钥</button></div>
+        <div class="panel">
+          <div class="panel-head"><div><h2>静态授权通道</h2><p>同一个 Access Credential 可被允许通过 Bearer、Header 或 Query 使用。</p></div><button id="save-access-settings" class="button">保存设置</button></div>
+          <div class="channel-grid">
+            <label class="channel-card"><span><strong>Authorization Bearer</strong><small>与 OAuth Bearer 共用 Authorization 请求头</small></span><input id="setting-bearer" type="checkbox"></label>
+            <label class="channel-card"><span><strong>自定义 Header</strong><small>推荐给脚本、反向代理和 CI 使用</small></span><input id="setting-header" type="checkbox"></label>
+            <label class="field">Header Name<input id="setting-header-name" value="X-MCP-Token"></label>
+            <label class="channel-card"><span><strong>Query 参数</strong><small>默认关闭，仅用于无法设置 Header 的客户端</small></span><input id="setting-query" type="checkbox"></label>
+            <label class="field">Query Name<input id="setting-query-name" value="mcp_token"></label>
+          </div>
+          <div class="notice">Query 密钥可能进入反向代理日志、浏览器历史、APM 或 Referer。只有确实需要时才开启。</div>
         </div>
+        <div class="panel">
+          <div class="panel-head"><div><h2>访问密钥</h2><p>原始密钥只在创建时显示一次；持久化只保存哈希。</p></div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>名称</th><th>Key 前缀</th><th>允许入口</th><th>Scope</th><th>状态</th><th>最近使用</th><th>操作</th></tr></thead>
+              <tbody id="credential-rows"></tbody>
+            </table>
+          </div>
+          <div id="credential-empty" class="empty hidden">还没有 Access Credential。</div>
+        </div>
+        <article class="panel"><h2>OAuth</h2><p class="muted">Authorization Code + PKCE S256，Access Token 绑定具体 MCP Resource。</p><div id="oauth-meta" class="stack mini"><span class="muted">读取 OAuth Metadata…</span></div></article>
       </section>
 
       <section id="page-logs" class="page">
@@ -143,6 +161,29 @@
       </section>
     </main>
   </div>
+
+  <dialog id="credential-dialog" class="dialog">
+    <form id="credential-form" method="dialog">
+      <div class="dialog-head"><div><h2 id="credential-dialog-title">创建访问密钥</h2><p>选择这个密钥允许使用的入口。</p></div><button type="button" class="icon-button" data-action="close-credential-dialog">×</button></div>
+      <input id="credential-id" type="hidden">
+      <div class="form-grid">
+        <label class="field span-2">名称<input id="credential-name" required maxlength="80"></label>
+        <label class="check"><input id="credential-enabled" type="checkbox" checked> 启用</label>
+        <label class="check"><input id="credential-bearer" type="checkbox" checked> Bearer</label>
+        <label class="check"><input id="credential-header" type="checkbox" checked> Header</label>
+        <label class="check"><input id="credential-query" type="checkbox"> Query</label>
+        <label class="field span-2">Scopes（空格分隔）<input id="credential-scopes" value="mcp:*"></label>
+      </div>
+      <p id="credential-form-error" class="form-error hidden"></p>
+      <div class="dialog-actions"><button type="button" class="button" data-action="close-credential-dialog">取消</button><button type="submit" class="button primary">保存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="secret-dialog" class="dialog">
+    <div class="dialog-head"><div><h2>访问密钥已创建</h2><p>这是唯一一次显示原始密钥，请立即保存。</p></div></div>
+    <pre id="created-secret" class="secret-value"></pre>
+    <div class="dialog-actions"><button id="copy-secret" class="button">复制</button><button id="close-secret" class="button primary">我已保存</button></div>
+  </dialog>
 
   <dialog id="mcp-dialog" class="dialog">
     <form id="mcp-form" method="dialog">

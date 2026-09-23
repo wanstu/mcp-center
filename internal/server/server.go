@@ -15,6 +15,7 @@ import (
 	"time"
 
 	mcpcenter "github.com/wanstu/mcp-center-core"
+	accesscore "github.com/wanstu/mcp-center-core/access"
 	account "github.com/wanstu/mcp-center-core/auth"
 	oauthcore "github.com/wanstu/mcp-center-core/oauth"
 )
@@ -29,6 +30,7 @@ type Config struct {
 
 type App struct {
 	core    *mcpcenter.Service
+	access  *accesscore.Service
 	account *account.Service
 	oauth   *oauthcore.Service
 	assets  fs.FS
@@ -62,17 +64,22 @@ func New(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	accessService, err := accesscore.New(filepath.Join(cfg.DataDir, "access.json"))
+	if err != nil {
+		return nil, err
+	}
 	return &App{
-		core: mcpcenter.New(store), account: accounts, oauth: oauthService,
+		core: mcpcenter.New(store), access: accessService, account: accounts, oauth: oauthService,
 		assets: cfg.Assets, baseURL: base, secure: strings.HasPrefix(base, "https://"),
 		proxies: map[string]http.Handler{},
 	}, nil
 }
 
-func (a *App) Core() *mcpcenter.Service  { return a.core }
-func (a *App) Account() *account.Service { return a.account }
-func (a *App) OAuth() *oauthcore.Service { return a.oauth }
-func (a *App) BaseURL() string           { return a.baseURL }
+func (a *App) Core() *mcpcenter.Service    { return a.core }
+func (a *App) Access() *accesscore.Service { return a.access }
+func (a *App) Account() *account.Service   { return a.account }
+func (a *App) OAuth() *oauthcore.Service   { return a.oauth }
+func (a *App) BaseURL() string             { return a.baseURL }
 
 func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -89,6 +96,13 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("POST /api/mcps/{id}/probe", a.requireAdmin(http.HandlerFunc(a.handleMCPProbe)))
 	mux.Handle("GET /api/mcps/{id}/tools", a.requireAdmin(http.HandlerFunc(a.handleMCPTools)))
 	mux.Handle("POST /api/mcps/{id}/call", a.requireAdmin(http.HandlerFunc(a.handleMCPCall)))
+
+	mux.Handle("GET /api/access/settings", a.requireAdmin(http.HandlerFunc(a.handleAccessSettingsGet)))
+	mux.Handle("PUT /api/access/settings", a.requireAdmin(http.HandlerFunc(a.handleAccessSettingsUpdate)))
+	mux.Handle("GET /api/access/credentials", a.requireAdmin(http.HandlerFunc(a.handleAccessCredentialList)))
+	mux.Handle("POST /api/access/credentials", a.requireAdmin(http.HandlerFunc(a.handleAccessCredentialCreate)))
+	mux.Handle("PUT /api/access/credentials/{id}", a.requireAdmin(http.HandlerFunc(a.handleAccessCredentialUpdate)))
+	mux.Handle("DELETE /api/access/credentials/{id}", a.requireAdmin(http.HandlerFunc(a.handleAccessCredentialDelete)))
 
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", a.handleAuthorizationServerMetadata)
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource", a.handleProtectedResourceMetadata)

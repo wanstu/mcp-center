@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MCP Center</title>
+  <link rel="stylesheet" href="/desktopkit/tokens.css">
+  <link rel="stylesheet" href="/desktopkit/base.css">
+  <link rel="stylesheet" href="/desktopkit/components.css">
+  <link rel="stylesheet" href="/desktopkit/navigation.css">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div id="auth-screen" class="auth-screen hidden">
+    <section class="auth-card">
+      <div class="brand-mark">M</div>
+      <div id="setup-copy">
+        <h1>初始化 MCP Center</h1>
+        <p>创建第一个管理员。初始化完成后，公开注册会自动关闭。</p>
+      </div>
+      <div id="login-copy" class="hidden">
+        <h1>登录 MCP Center</h1>
+        <p>使用管理员账号进入控制台。</p>
+      </div>
+      <form id="auth-form" class="stack">
+        <label class="field">用户名<input id="auth-username" autocomplete="username" required></label>
+        <label class="field">密码<input id="auth-password" type="password" autocomplete="current-password" minlength="10" required></label>
+        <button id="auth-submit" class="button primary" type="submit">创建管理员</button>
+        <p id="auth-error" class="form-error hidden"></p>
+      </form>
+    </section>
+  </div>
+
+  <div id="app" class="app-shell hidden">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark small">M</div>
+        <div><strong>MCP Center</strong><span>Core Control</span></div>
+      </div>
+      <nav class="nav">
+        <button data-page="dashboard" class="active">工作台</button>
+        <button data-page="mcps">MCP 服务</button>
+        <button data-page="tools">工具测试</button>
+        <div class="nav-label">安全与审计</div>
+        <button data-page="access">访问授权</button>
+        <button data-page="logs">调用日志</button>
+        <div class="nav-label">系统</div>
+        <button data-page="settings">设置</button>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <div class="account-box">
+        <div><strong id="me-name">admin</strong><span>管理员</span></div>
+        <button id="logout" class="button ghost small">退出</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div><span class="muted">MCP Center / </span><strong id="page-title">工作台</strong></div>
+        <div class="top-actions">
+          <span id="core-state" class="status ok">Core 正常</span>
+          <button id="refresh" class="button small">刷新</button>
+        </div>
+      </header>
+
+      <section id="page-dashboard" class="page active">
+        <div class="page-head">
+          <div><h1>工作台</h1><p>查看 MCP 服务、工具和最近状态。</p></div>
+          <button class="button primary" data-action="open-add">添加 MCP</button>
+        </div>
+        <div class="metrics">
+          <article class="metric"><span>MCP 服务</span><strong id="metric-mcps">0</strong><small id="metric-mcps-sub">尚未加载</small></article>
+          <article class="metric"><span>在线服务</span><strong id="metric-online">0</strong><small>最近探测成功</small></article>
+          <article class="metric"><span>已发现工具</span><strong id="metric-tools">0</strong><small>来自已探测服务</small></article>
+          <article class="metric"><span>授权方式</span><strong>4</strong><small>OAuth / Bearer / Header / Query</small></article>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div><h2>服务概览</h2><p>快速查看当前 MCP 配置。</p></div><button class="button ghost small" data-page-link="mcps">查看全部</button></div>
+          <div id="dashboard-list" class="empty">暂无 MCP 服务</div>
+        </div>
+      </section>
+
+      <section id="page-mcps" class="page">
+        <div class="page-head">
+          <div><h1>MCP 服务</h1><p>管理上游 MCP 定义、连接和工具发现。</p></div>
+          <div class="row"><button id="probe-all" class="button">探测全部</button><button class="button primary" data-action="open-add">添加 MCP</button></div>
+        </div>
+        <div class="panel">
+          <div class="toolbar">
+            <input id="mcp-search" class="search" placeholder="搜索名称、Endpoint 或 Transport">
+          </div>
+          <div id="mcp-table-wrap" class="table-wrap">
+            <table>
+              <thead><tr><th>名称</th><th>Transport</th><th>状态</th><th>工具</th><th>Endpoint / Command</th><th>操作</th></tr></thead>
+              <tbody id="mcp-rows"></tbody>
+            </table>
+          </div>
+          <div id="mcp-empty" class="empty hidden">还没有 MCP，先添加一个。</div>
+        </div>
+      </section>
+
+      <section id="page-tools" class="page">
+        <div class="page-head"><div><h1>工具测试</h1><p>读取 tools/list，并执行一次 tools/call。</p></div></div>
+        <div class="tool-layout">
+          <aside class="panel compact">
+            <label class="field">MCP 服务<select id="tool-mcp"></select></label>
+            <div id="tool-list" class="tool-list"></div>
+          </aside>
+          <div class="stack">
+            <div class="panel">
+              <div class="panel-head"><div><h2 id="tool-name">选择一个工具</h2><p id="tool-desc">工具描述会显示在这里。</p></div></div>
+              <pre id="tool-schema" class="code-block">{}</pre>
+            </div>
+            <div class="panel">
+              <label class="field">调用参数<textarea id="tool-args" rows="8">{}</textarea></label>
+              <div class="row end"><button id="tool-call" class="button primary" disabled>调用工具</button></div>
+              <pre id="tool-result" class="code-block result">等待调用…</pre>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-access" class="page">
+        <div class="page-head"><div><h1>访问授权</h1><p>统一使用 OAuth、Bearer、Header 和 Query 访问 MCP Endpoint。</p></div></div>
+        <div class="grid-2">
+          <article class="panel"><h2>OAuth</h2><p class="muted">Authorization Code + PKCE S256。</p><div id="oauth-meta" class="stack mini"><span class="muted">读取 OAuth Metadata…</span></div></article>
+          <article class="panel"><h2>静态访问密钥</h2><p class="muted">Bearer / Header / Query 将共用 Access Credential。后端接口完成后在此管理。</p><div class="notice">Query 授权默认关闭，避免密钥进入 URL 日志、浏览器历史和 Referer。</div></article>
+        </div>
+      </section>
+
+      <section id="page-logs" class="page">
+        <div class="page-head"><div><h1>调用日志</h1><p>展示 Request ID、授权方式、MCP、Tool、耗时与错误分类。</p></div></div>
+        <div class="panel empty">Audit API 接入后显示真实调用日志；不会记录原始密钥。</div>
+      </section>
+
+      <section id="page-settings" class="page">
+        <div class="page-head"><div><h1>设置</h1><p>服务地址、授权通道和日志策略。</p></div></div>
+        <div class="panel">
+          <div class="setting"><div><strong>OAuth</strong><span>Authorization Code + PKCE</span></div><span class="status ok">已接入</span></div>
+          <div class="setting"><div><strong>Bearer / Header / Query</strong><span>等待 Access Credential Core API</span></div><span class="status warn">开发中</span></div>
+          <div class="setting"><div><strong>调用审计</strong><span>等待 Audit Sink API</span></div><span class="status warn">开发中</span></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="mcp-dialog" class="dialog">
+    <form id="mcp-form" method="dialog">
+      <div class="dialog-head"><div><h2 id="mcp-dialog-title">添加 MCP</h2><p>支持 Streamable HTTP 和 stdio。</p></div><button type="button" class="icon-button" data-action="close-dialog">×</button></div>
+      <input id="mcp-id" type="hidden">
+      <div class="form-grid">
+        <label class="field">名称<input id="mcp-name" required></label>
+        <label class="field">Transport<select id="mcp-transport"><option value="streamable-http">Streamable HTTP</option><option value="stdio">stdio</option></select></label>
+        <label class="field span-2 http-only">Endpoint<input id="mcp-endpoint" placeholder="https://example.com/mcp"></label>
+        <label class="field stdio-only hidden">Executable<input id="mcp-executable" placeholder="node"></label>
+        <label class="field stdio-only hidden">Args（每行一个）<textarea id="mcp-args" rows="4"></textarea></label>
+        <label class="field http-only">Auth Mode<select id="mcp-auth"><option value="none">None</option><option value="headers">Secret-backed Headers</option></select></label>
+        <label class="check"><input id="mcp-default" type="checkbox"> 默认包含</label>
+      </div>
+      <p id="mcp-form-error" class="form-error hidden"></p>
+      <div class="dialog-actions"><button type="button" class="button" data-action="close-dialog">取消</button><button type="submit" class="button primary">保存</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast"></div>
+  <script src="/desktopkit/theme.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

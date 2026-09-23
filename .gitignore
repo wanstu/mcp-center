@@ -1,0 +1,7 @@
+/tmp/
+/dist/
+/build/
+*.exe
+*.test
+*.out
+.idea/

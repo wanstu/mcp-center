@@ -1,0 +1,184 @@
+if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),tools:new Map(),selectedTool:null,page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const el=id=>document.getElementById(id);
+const json=v=>JSON.stringify(v,null,2);
+const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
+
+function toast(message){const node=el('toast');node.textContent=message;node.classList.add('show');clearTimeout(window.__toastTimer);window.__toastTimer=setTimeout(()=>node.classList.remove('show'),2200)}
+function showError(node,error){node.textContent=String(error?.message||error);node.classList.remove('hidden')}
+function clearError(node){node.textContent='';node.classList.add('hidden')}
+
+const mockData={mcps:[
+{id:'mcp_demo_adm',name:'pj-adm',transport:'streamable-http',auth_mode:'none',endpoint:'http://127.0.0.1:8001/mcp',default_include_in_environment:true},
+{id:'mcp_demo_db',name:'wm-test-db',transport:'stdio',auth_mode:'none',executable:'mysql-mcp',args:['--readonly'],default_include_in_environment:false}
+],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]}};
+
+async function api(path,options={}){
+  if(state.mock)return mockApi(path,options);
+  const init={credentials:'same-origin',...options,headers:{...(options.body?{'Content-Type':'application/json'}:{}),...(options.headers||{})}};
+  const response=await fetch(path,init);
+  let payload=null;try{payload=await response.json()}catch{}
+  if(!response.ok)throw new Error(payload?.error||payload?.error_description||('HTTP '+response.status));
+  return payload;
+}
+async function mockApi(path,options){
+  await new Promise(r=>setTimeout(r,80));
+  const method=options.method||'GET';
+  if(path==='/api/setup')return {needs_bootstrap:false};
+  if(path==='/api/me')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
+  if(path==='/api/auth/login')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
+  if(path==='/api/auth/logout')return {ok:true};
+  if(path==='/api/mcps'&&method==='GET')return {mcps:mockData.mcps};
+  if(path==='/api/mcps'&&method==='POST'){const cfg=JSON.parse(options.body);const m={id:'mcp_'+Date.now(),...cfg};mockData.mcps.push(m);return {mcp:m}}
+  const m=path.match(/^\/api\/mcps\/([^/]+)(?:\/(probe|tools|call))?$/);
+  if(m){const id=m[1],action=m[2];
+    if(method==='DELETE'){mockData.mcps=mockData.mcps.filter(x=>x.id!==id);return {ok:true}}
+    if(method==='PUT'){const cfg=JSON.parse(options.body);const i=mockData.mcps.findIndex(x=>x.id===id);mockData.mcps[i]={...mockData.mcps[i],...cfg};return {mcp:mockData.mcps[i]}}
+    if(action==='probe')return {mcp_id:id,state:'healthy',tools:mockData.tools[id]||[],checked_at:new Date().toISOString()};
+    if(action==='tools')return {tools:mockData.tools[id]||[]};
+    if(action==='call')return {content:[{type:'text',text:'mock result'}],structuredContent:{ok:true,arguments:JSON.parse(options.body).arguments||{}}};
+  }
+  if(path==='/.well-known/oauth-authorization-server')return {issuer:location.origin,authorization_endpoint:location.origin+'/oauth/authorize',token_endpoint:location.origin+'/oauth/token',registration_endpoint:location.origin+'/oauth/register',code_challenge_methods_supported:['S256']};
+  throw new Error('Mock endpoint not implemented: '+method+' '+path);
+}
+
+async function bootstrap(){
+  try{
+    const setup=await api('/api/setup');
+    state.needsBootstrap=Boolean(setup.needs_bootstrap);
+    if(state.needsBootstrap)return showAuth(true);
+    try{
+      const me=await api('/api/me');
+      state.user=me.user;enterApp();
+    }catch{showAuth(false)}
+  }catch(error){
+    if(state.mock){showAuth(false);return}
+    document.body.innerHTML='<main style="padding:32px;font-family:Segoe UI,sans-serif"><h1>MCP Center 启动失败</h1><p>'+escapeHTML(error.message)+'</p></main>';
+  }
+}
+function showAuth(setup){
+  el('app').classList.add('hidden');el('auth-screen').classList.remove('hidden');
+  el('setup-copy').classList.toggle('hidden',!setup);el('login-copy').classList.toggle('hidden',setup);
+  el('auth-submit').textContent=setup?'创建管理员':'登录';
+  state.needsBootstrap=setup;el('auth-username').focus();
+}
+async function enterApp(){
+  el('auth-screen').classList.add('hidden');el('app').classList.remove('hidden');
+  el('me-name').textContent=state.user?.username||'admin';
+  await Promise.allSettled([loadMCPs(),loadOAuthMetadata()]);
+}
+async function submitAuth(event){
+  event.preventDefault();clearError(el('auth-error'));
+  const username=el('auth-username').value.trim(),password=el('auth-password').value;
+  try{
+    const path=state.needsBootstrap?'/api/setup/register':'/api/auth/login';
+    const result=await api(path,{method:'POST',body:JSON.stringify({username,password})});
+    state.user=result.user;enterApp();
+  }catch(error){showError(el('auth-error'),error)}
+}
+
+function switchPage(page){
+  state.page=page;
+  document.querySelectorAll('.page').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.nav button[data-page]').forEach(n=>n.classList.toggle('active',n.dataset.page===page));
+  el('page-'+page).classList.add('active');el('page-title').textContent=pageNames[page]||page;
+  if(page==='tools')refreshToolMCPSelect();
+}
+async function loadMCPs(){
+  const result=await api('/api/mcps');state.mcps=result.mcps||[];renderMCPs();renderDashboard();refreshToolMCPSelect();
+}
+function renderMCPs(){
+  const q=el('mcp-search').value.trim().toLowerCase();
+  const items=state.mcps.filter(m=>!q||[m.name,m.endpoint,m.executable,m.transport].some(v=>String(v||'').toLowerCase().includes(q)));
+  const body=el('mcp-rows');body.innerHTML='';
+  for(const m of items){
+    const health=state.health.get(m.id),status=health?.state==='healthy'?'<span class="status ok">在线</span>':health?.state==='error'?'<span class="status bad">异常</span>':'<span class="status">未探测</span>';
+    const tools=health?.tools?.length??state.tools.get(m.id)?.length??'—';
+    const where=m.transport==='stdio'?escapeHTML([m.executable,...(m.args||[])].join(' ')):escapeHTML(m.endpoint||'');
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td><strong>'+escapeHTML(m.name)+'</strong><br><small class="muted">'+escapeHTML(m.id)+'</small></td><td>'+escapeHTML(m.transport)+'</td><td>'+status+'</td><td>'+tools+'</td><td><span class="muted">'+where+'</span></td><td><div class="row"><button class="button small" data-op="probe">探测</button><button class="button small" data-op="test">测试</button><button class="button ghost small" data-op="edit">编辑</button><button class="button ghost small" data-op="delete">删除</button></div></td>';
+    tr.querySelector('[data-op="probe"]').onclick=()=>probeMCP(m.id);
+    tr.querySelector('[data-op="test"]').onclick=()=>{switchPage('tools');el('tool-mcp').value=m.id;loadTools(m.id)};
+    tr.querySelector('[data-op="edit"]').onclick=()=>openMCPDialog(m);
+    tr.querySelector('[data-op="delete"]').onclick=()=>deleteMCP(m);
+    body.appendChild(tr);
+  }
+  el('mcp-table-wrap').classList.toggle('hidden',items.length===0);el('mcp-empty').classList.toggle('hidden',items.length!==0);
+}
+function renderDashboard(){
+  el('metric-mcps').textContent=state.mcps.length;
+  const online=[...state.health.values()].filter(x=>x.state==='healthy').length;
+  el('metric-online').textContent=online;
+  let tools=0;for(const list of state.tools.values())tools+=list.length;for(const h of state.health.values())if(h.tools)tools=Math.max(tools,h.tools.length);
+  el('metric-tools').textContent=tools;el('metric-mcps-sub').textContent=state.mcps.length?'已加载配置':'尚未添加';
+  const box=el('dashboard-list');box.innerHTML='';
+  if(!state.mcps.length){box.className='empty';box.textContent='暂无 MCP 服务';return}
+  box.className='service-list';
+  for(const m of state.mcps.slice(0,6)){const row=document.createElement('div');row.className='service-item';const h=state.health.get(m.id);row.innerHTML='<div><strong>'+escapeHTML(m.name)+'</strong><small>'+escapeHTML(m.transport)+' · '+escapeHTML(m.endpoint||m.executable||'')+'</small></div>'+(h?.state==='healthy'?'<span class="status ok">在线</span>':'<span class="status">未探测</span>');box.appendChild(row)}
+}
+async function probeMCP(id){
+  try{toast('正在探测…');const result=await api('/api/mcps/'+encodeURIComponent(id)+'/probe',{method:'POST'});state.health.set(id,result);if(result.tools)state.tools.set(id,result.tools);renderMCPs();renderDashboard();toast(result.state==='healthy'?'探测成功':'探测完成：'+result.state)}
+  catch(error){state.health.set(id,{state:'error',message:error.message});renderMCPs();toast('探测失败：'+error.message)}
+}
+async function probeAll(){for(const m of state.mcps)await probeMCP(m.id)}
+function openMCPDialog(m=null){
+  el('mcp-dialog-title').textContent=m?'编辑 MCP':'添加 MCP';el('mcp-id').value=m?.id||'';el('mcp-name').value=m?.name||'';el('mcp-transport').value=m?.transport||'streamable-http';el('mcp-endpoint').value=m?.endpoint||'';el('mcp-executable').value=m?.executable||'';el('mcp-args').value=(m?.args||[]).join('\n');el('mcp-auth').value=m?.auth_mode||'none';el('mcp-default').checked=Boolean(m?.default_include_in_environment);clearError(el('mcp-form-error'));updateTransportFields();el('mcp-dialog').showModal();
+}
+function updateTransportFields(){const stdio=el('mcp-transport').value==='stdio';document.querySelectorAll('.stdio-only').forEach(n=>n.classList.toggle('hidden',!stdio));document.querySelectorAll('.http-only').forEach(n=>n.classList.toggle('hidden',stdio))}
+async function saveMCP(event){
+  event.preventDefault();clearError(el('mcp-form-error'));
+  const id=el('mcp-id').value.trim(),transport=el('mcp-transport').value;
+  const payload={name:el('mcp-name').value.trim(),transport,auth_mode:transport==='stdio'?'none':el('mcp-auth').value,default_include_in_environment:el('mcp-default').checked,health_policy:{health_check_enabled:false,auto_reconnect:false}};
+  if(transport==='stdio'){payload.executable=el('mcp-executable').value.trim();payload.args=el('mcp-args').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean)}
+  else payload.endpoint=el('mcp-endpoint').value.trim();
+  try{await api(id?'/api/mcps/'+encodeURIComponent(id):'/api/mcps',{method:id?'PUT':'POST',body:JSON.stringify(payload)});el('mcp-dialog').close();await loadMCPs();toast(id?'MCP 已更新':'MCP 已添加')}
+  catch(error){showError(el('mcp-form-error'),error)}
+}
+async function deleteMCP(m){if(!confirm('删除 MCP “'+m.name+'”？'))return;try{await api('/api/mcps/'+encodeURIComponent(m.id),{method:'DELETE'});state.health.delete(m.id);state.tools.delete(m.id);await loadMCPs();toast('已删除')}catch(error){toast(error.message)}}
+
+function refreshToolMCPSelect(){
+  const select=el('tool-mcp'),current=select.value;select.innerHTML='';
+  for(const m of state.mcps){const o=document.createElement('option');o.value=m.id;o.textContent=m.name;select.appendChild(o)}
+  if(current&&state.mcps.some(m=>m.id===current))select.value=current;
+  if(select.value)loadTools(select.value);else{el('tool-list').innerHTML='<div class="empty">暂无 MCP</div>';selectTool(null)}
+}
+async function loadTools(id){
+  try{const result=await api('/api/mcps/'+encodeURIComponent(id)+'/tools');state.tools.set(id,result.tools||[]);renderToolList(result.tools||[]);renderDashboard()}
+  catch(error){el('tool-list').innerHTML='<div class="form-error">'+escapeHTML(error.message)+'</div>'}
+}
+function renderToolList(tools){
+  const box=el('tool-list');box.innerHTML='';if(!tools.length){box.innerHTML='<div class="empty">未发现工具</div>';selectTool(null);return}
+  for(const tool of tools){const b=document.createElement('button');b.innerHTML='<strong>'+escapeHTML(tool.name)+'</strong><small>'+escapeHTML(tool.description||'')+'</small>';b.onclick=()=>{box.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');selectTool(tool)};box.appendChild(b)}
+  box.querySelector('button')?.click();
+}
+function selectTool(tool){state.selectedTool=tool;el('tool-name').textContent=tool?.name||'选择一个工具';el('tool-desc').textContent=tool?.description||'工具描述会显示在这里。';el('tool-schema').textContent=json(tool?.input_schema||{});el('tool-call').disabled=!tool}
+async function callTool(){
+  const mcpID=el('tool-mcp').value;if(!mcpID||!state.selectedTool)return;
+  let args;try{args=JSON.parse(el('tool-args').value||'{}')}catch(error){toast('参数不是合法 JSON');return}
+  el('tool-result').textContent='调用中…';el('tool-call').disabled=true;
+  try{const result=await api('/api/mcps/'+encodeURIComponent(mcpID)+'/call',{method:'POST',body:JSON.stringify({name:state.selectedTool.name,arguments:args})});el('tool-result').textContent=json(result)}
+  catch(error){el('tool-result').textContent='ERROR: '+error.message}
+  finally{el('tool-call').disabled=false}
+}
+async function loadOAuthMetadata(){
+  try{const meta=await api('/.well-known/oauth-authorization-server');const box=el('oauth-meta');box.innerHTML='';for(const key of ['issuer','authorization_endpoint','token_endpoint','registration_endpoint']){const line=document.createElement('div');line.innerHTML='<strong>'+escapeHTML(key)+'</strong><div class="muted">'+escapeHTML(meta[key]||'—')+'</div>';box.appendChild(line)}}
+  catch(error){el('oauth-meta').innerHTML='<span class="form-error">'+escapeHTML(error.message)+'</span>'}
+}
+function escapeHTML(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+document.addEventListener('click',event=>{
+  const page=event.target.closest('[data-page]')?.dataset.page;if(page)switchPage(page);
+  const link=event.target.closest('[data-page-link]')?.dataset.pageLink;if(link)switchPage(link);
+  if(event.target.closest('[data-action="open-add"]'))openMCPDialog();
+  if(event.target.closest('[data-action="close-dialog"]'))el('mcp-dialog').close();
+});
+el('auth-form').addEventListener('submit',submitAuth);
+el('logout').onclick=async()=>{try{await api('/api/auth/logout',{method:'POST'})}finally{state.user=null;showAuth(false)}};
+el('refresh').onclick=async()=>{try{await loadMCPs();toast('已刷新')}catch(error){toast(error.message)}};
+el('probe-all').onclick=probeAll;
+el('mcp-search').addEventListener('input',renderMCPs);
+el('mcp-transport').addEventListener('change',updateTransportFields);
+el('mcp-form').addEventListener('submit',saveMCP);
+el('tool-mcp').addEventListener('change',event=>loadTools(event.target.value));
+el('tool-call').onclick=callTool;
+bootstrap();

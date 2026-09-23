@@ -1,5 +1,5 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),tools:new Map(),selectedTool:null,accessSettings:null,credentials:[],page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),tools:new Map(),selectedTool:null,accessSettings:null,credentials:[],audits:[],page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
 const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
@@ -11,7 +11,7 @@ function clearError(node){node.textContent='';node.classList.add('hidden')}
 const mockData={mcps:[
 {id:'mcp_demo_adm',name:'pj-adm',transport:'streamable-http',auth_mode:'none',endpoint:'http://127.0.0.1:8001/mcp',default_include_in_environment:true},
 {id:'mcp_demo_db',name:'wm-test-db',transport:'stdio',auth_mode:'none',executable:'mysql-mcp',args:['--readonly'],default_include_in_environment:false}
-],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},credentials:[]};
+],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},credentials:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
 
 async function api(path,options={}){
   if(state.mock)return mockApi(path,options);
@@ -31,6 +31,8 @@ async function mockApi(path,options){
   if(path==='/api/access/settings'&&method==='GET')return {settings:mockData.accessSettings};
   if(path==='/api/access/settings'&&method==='PUT'){mockData.accessSettings=JSON.parse(options.body);return {settings:mockData.accessSettings}}
   if(path==='/api/access/credentials'&&method==='GET')return {credentials:mockData.credentials};
+  if(path.startsWith('/api/audit')&&method==='GET')return {events:mockData.audits};
+  if(path==='/api/audit'&&method==='DELETE'){mockData.audits=[];return {ok:true}}
   if(path==='/api/access/credentials'&&method==='POST'){const input=JSON.parse(options.body),secret='mcp_mock_'+Date.now(),item={id:'cred_'+Date.now(),secret_prefix:secret.slice(0,12),created_at:new Date().toISOString(),updated_at:new Date().toISOString(),last_used_at:null,...input};mockData.credentials.push(item);return {credential:item,secret}}
   const cred=path.match(/^\/api\/access\/credentials\/([^/]+)$/);
   if(cred){const id=cred[1];if(method==='DELETE'){mockData.credentials=mockData.credentials.filter(x=>x.id!==id);return {ok:true}}if(method==='PUT'){const input=JSON.parse(options.body),i=mockData.credentials.findIndex(x=>x.id===id);mockData.credentials[i]={...mockData.credentials[i],...input,updated_at:new Date().toISOString()};return {credential:mockData.credentials[i]}}}
@@ -90,6 +92,7 @@ function switchPage(page){
   el('page-'+page).classList.add('active');el('page-title').textContent=pageNames[page]||page;
   if(page==='tools')refreshToolMCPSelect();
   if(page==='access')loadAccess().catch(error=>toast(error.message));
+  if(page==='logs')loadAudit().catch(error=>toast(error.message));
 }
 async function loadMCPs(){
   const result=await api('/api/mcps');state.mcps=result.mcps||[];renderMCPs();renderDashboard();refreshToolMCPSelect();
@@ -226,6 +229,37 @@ async function saveAccessSettings(){
   const payload={bearer_enabled:el('setting-bearer').checked,header_enabled:el('setting-header').checked,header_name:el('setting-header-name').value.trim(),query_enabled:el('setting-query').checked,query_name:el('setting-query-name').value.trim()};
   try{const result=await api('/api/access/settings',{method:'PUT',body:JSON.stringify(payload)});state.accessSettings=result.settings;toast('授权设置已保存')}catch(error){toast(error.message)}
 }
+async function loadAudit(){
+  const result=await api('/api/audit?limit=500');
+  state.audits=result.events||[];
+  renderAudit();
+}
+function renderAudit(){
+  const q=(el('audit-search')?.value||'').trim().toLowerCase();
+  const items=state.audits.filter(item=>{
+    if(!q)return true;
+    return [item.request_id,item.principal_name,item.principal_id,item.auth_channel,item.mcp_id,item.tool_name,item.status,item.error_kind].some(v=>String(v||'').toLowerCase().includes(q));
+  });
+  const body=el('audit-rows');body.innerHTML='';
+  for(const item of items){
+    const tr=document.createElement('tr');
+    const when=item.started_at?new Date(item.started_at).toLocaleString():'—';
+    const principal=item.principal_name||item.principal_id||'—';
+    const auth=[item.auth_channel,item.source].filter(Boolean).join(' / ')||'—';
+    const status=item.status==='success'?'<span class="status ok">成功</span>':'<span class="status bad">'+escapeHTML(item.error_kind||'失败')+'</span>';
+    const keys=Array.isArray(item.input_meta?.keys)?item.input_meta.keys.join(', '):'';
+    const summary=keys?('keys: '+keys):'无参数';
+    tr.innerHTML='<td>'+escapeHTML(when)+'</td><td><span class="muted">'+escapeHTML(item.request_id||'—')+'</span></td><td>'+escapeHTML(principal)+'</td><td>'+escapeHTML(auth)+'</td><td><strong>'+escapeHTML(item.mcp_id||'—')+'</strong><br><span class="muted">'+escapeHTML(item.tool_name||'—')+'</span></td><td>'+escapeHTML(String(item.duration_ms??0))+' ms</td><td>'+status+'</td><td><span class="muted">'+escapeHTML(summary)+'</span></td>';
+    body.appendChild(tr);
+  }
+  const empty=items.length===0;
+  el('audit-table-wrap').classList.toggle('hidden',empty);
+  el('audit-empty').classList.toggle('hidden',!empty);
+}
+async function clearAudit(){
+  if(!confirm('清空全部调用日志？此操作不可恢复。'))return;
+  try{await api('/api/audit',{method:'DELETE'});state.audits=[];renderAudit();toast('调用日志已清空')}catch(error){toast(error.message)}
+}
 function escapeHTML(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
 document.addEventListener('click',event=>{
@@ -249,4 +283,7 @@ el('save-access-settings').onclick=saveAccessSettings;
 el('credential-form').addEventListener('submit',saveCredential);
 el('close-secret').onclick=()=>el('secret-dialog').close();
 el('copy-secret').onclick=async()=>{try{await navigator.clipboard.writeText(el('created-secret').textContent);toast('密钥已复制')}catch{toast('复制失败，请手动复制')}};
+el('refresh-audit').onclick=()=>loadAudit().then(()=>toast('日志已刷新')).catch(error=>toast(error.message));
+el('clear-audit').onclick=clearAudit;
+el('audit-search').addEventListener('input',renderAudit);
 bootstrap();

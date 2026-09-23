@@ -91,7 +91,13 @@ func (a *App) handleMCPCall(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	user, err := a.currentUser(r)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err)
+		return
+	}
+	auditCtx := auditContextForAdmin(r, user.ID, user.Username)
+	ctx, cancel := context.WithTimeout(auditCtx, 60*time.Second)
 	defer cancel()
 	result, err := a.core.CallTool(ctx, r.PathValue("id"), input.Name, input.Arguments)
 	if err != nil {
@@ -103,10 +109,12 @@ func (a *App) handleMCPCall(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handleMCPProxy(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if _, err := a.authenticateMCPRequest(r, id); err != nil {
+	principal, err := a.authenticateMCPRequest(r, id)
+	if err != nil {
 		a.writeBearerChallenge(w, id)
 		return
 	}
+	r = r.WithContext(auditContextForMCP(r, principal))
 	handler, err := a.proxyHandler(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)

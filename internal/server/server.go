@@ -18,6 +18,7 @@ import (
 	accesscore "github.com/wanstu/mcp-center-core/access"
 	account "github.com/wanstu/mcp-center-core/auth"
 	oauthcore "github.com/wanstu/mcp-center-core/oauth"
+	auditstore "github.com/wanstu/mcp-center/internal/audit"
 )
 
 const sessionCookie = "mcp_center_session"
@@ -33,6 +34,7 @@ type App struct {
 	access  *accesscore.Service
 	account *account.Service
 	oauth   *oauthcore.Service
+	audit   *auditstore.Store
 	assets  fs.FS
 	baseURL string
 	secure  bool
@@ -68,8 +70,14 @@ func New(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	auditLog, err := auditstore.New(filepath.Join(cfg.DataDir, "audit.jsonl"))
+	if err != nil {
+		return nil, err
+	}
+	coreService := mcpcenter.New(store)
+	coreService.SetAuditSink(auditLog)
 	return &App{
-		core: mcpcenter.New(store), access: accessService, account: accounts, oauth: oauthService,
+		core: coreService, access: accessService, account: accounts, oauth: oauthService, audit: auditLog,
 		assets: cfg.Assets, baseURL: base, secure: strings.HasPrefix(base, "https://"),
 		proxies: map[string]http.Handler{},
 	}, nil
@@ -103,6 +111,8 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("POST /api/access/credentials", a.requireAdmin(http.HandlerFunc(a.handleAccessCredentialCreate)))
 	mux.Handle("PUT /api/access/credentials/{id}", a.requireAdmin(http.HandlerFunc(a.handleAccessCredentialUpdate)))
 	mux.Handle("DELETE /api/access/credentials/{id}", a.requireAdmin(http.HandlerFunc(a.handleAccessCredentialDelete)))
+	mux.Handle("GET /api/audit", a.requireAdmin(http.HandlerFunc(a.handleAuditList)))
+	mux.Handle("DELETE /api/audit", a.requireAdmin(http.HandlerFunc(a.handleAuditClear)))
 
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", a.handleAuthorizationServerMetadata)
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource", a.handleProtectedResourceMetadata)

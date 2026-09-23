@@ -27,10 +27,11 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - 可运行 CLI 服务入口
 - Static Access Credential：Bearer / Header / Query
 - 授权通道开关与 Header / Query 参数名配置
+- MCP 工具调用审计：Request ID / Principal / 授权通道 / MCP / Tool / 耗时 / 错误分类
+- Audit JSONL 持久化与控制台查询/清空
 
 开发中：
 
-- 调用审计日志
 - MCP Import / Export
 - 更完整设置页面
 

@@ -7,7 +7,7 @@ func TestAssetsIncludeAppAndKit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"index.html", "app.js", "styles.css", "desktopkit/tokens.css", "desktopkit/components.css"} {
+	for _, path := range []string{"index.html", "app.js", "styles.css", "favicon.svg", "desktopkit/tokens.css", "desktopkit/components.css"} {
 		f, err := assets.Open(path)
 		if err != nil {
 			t.Fatalf("open %s: %v", path, err)

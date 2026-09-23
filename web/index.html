@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>MCP Center</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="stylesheet" href="/desktopkit/tokens.css">
   <link rel="stylesheet" href="/desktopkit/base.css">
   <link rel="stylesheet" href="/desktopkit/components.css">
@@ -147,16 +148,25 @@
       </section>
 
       <section id="page-logs" class="page">
-        <div class="page-head"><div><h1>调用日志</h1><p>展示 Request ID、授权方式、MCP、Tool、耗时与错误分类。</p></div></div>
-        <div class="panel empty">Audit API 接入后显示真实调用日志；不会记录原始密钥。</div>
+        <div class="page-head"><div><h1>调用日志</h1><p>展示 Request ID、Principal、授权方式、MCP、Tool、耗时与错误分类；不记录原始密钥或工具参数值。</p></div><div class="row"><button id="refresh-audit" class="button">刷新</button><button id="clear-audit" class="button">清空日志</button></div></div>
+        <div class="panel">
+          <div class="toolbar"><input id="audit-search" class="search" placeholder="搜索 Request ID、Principal、MCP、Tool"></div>
+          <div id="audit-table-wrap" class="table-wrap">
+            <table>
+              <thead><tr><th>时间</th><th>Request ID</th><th>Principal</th><th>授权</th><th>MCP / Tool</th><th>耗时</th><th>状态</th><th>参数摘要</th></tr></thead>
+              <tbody id="audit-rows"></tbody>
+            </table>
+          </div>
+          <div id="audit-empty" class="empty hidden">暂无调用日志。</div>
+        </div>
       </section>
 
       <section id="page-settings" class="page">
         <div class="page-head"><div><h1>设置</h1><p>服务地址、授权通道和日志策略。</p></div></div>
         <div class="panel">
           <div class="setting"><div><strong>OAuth</strong><span>Authorization Code + PKCE</span></div><span class="status ok">已接入</span></div>
-          <div class="setting"><div><strong>Bearer / Header / Query</strong><span>等待 Access Credential Core API</span></div><span class="status warn">开发中</span></div>
-          <div class="setting"><div><strong>调用审计</strong><span>等待 Audit Sink API</span></div><span class="status warn">开发中</span></div>
+          <div class="setting"><div><strong>Bearer / Header / Query</strong><span>统一 Access Credential，可独立开关授权入口</span></div><span class="status ok">已接入</span></div>
+          <div class="setting"><div><strong>调用审计</strong><span>JSONL 持久化，参数仅记录键名和类型</span></div><span class="status ok">已接入</span></div>
         </div>
       </section>
     </main>

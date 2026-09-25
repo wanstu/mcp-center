@@ -1,5 +1,5 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),tools:new Map(),selectedTool:null,accessSettings:null,credentials:[],audits:[],page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,accessSettings:null,credentials:[],audits:[],page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
 const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
@@ -11,7 +11,7 @@ function clearError(node){node.textContent='';node.classList.add('hidden')}
 const mockData={mcps:[
 {id:'mcp_demo_adm',name:'pj-adm',transport:'streamable-http',auth_mode:'none',endpoint:'http://127.0.0.1:8001/mcp',default_include_in_environment:true},
 {id:'mcp_demo_db',name:'wm-test-db',transport:'stdio',auth_mode:'none',executable:'mysql-mcp',args:['--readonly'],default_include_in_environment:false}
-],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},credentials:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
+],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},credentials:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
 
 async function api(path,options={}){
   if(state.mock)return mockApi(path,options);
@@ -45,15 +45,18 @@ async function mockApi(path,options){
     for(const cfg of configs){const i=mockData.mcps.findIndex(x=>x.name.toLowerCase()===String(cfg.name||'').toLowerCase());if(i>=0){if(request.conflict==='error')throw new Error('MCP 已存在: '+cfg.name);if(request.conflict==='skip'){skipped++;continue}mockData.mcps[i]={...mockData.mcps[i],...cfg};updated++;continue}mockData.mcps.push({id:'mcp_'+Date.now()+'_'+added,...cfg});added++}
     return {added,updated,skipped,items:[]};
   }
+  if(path==='/api/runtime'&&method==='GET')return {runtime:mockData.mcps.map(m=>mockData.runtime[m.id]||{mcp_id:m.id,state:'disconnected',tool_count:0})};
+  const runtimePath=path.match(/^\/api\/runtime\/([^/]+)\/(refresh|disconnect)$/);
+  if(runtimePath&&method==='POST'){const id=runtimePath[1],action=runtimePath[2];if(action==='disconnect'){const status={mcp_id:id,state:'disconnected',tool_count:0};mockData.runtime[id]=status;return {status}}const tools=mockData.tools[id]||[];const status={mcp_id:id,state:'connected',tool_count:tools.length,connected_at:new Date().toISOString(),last_used_at:new Date().toISOString()};mockData.runtime[id]=status;return {status,tools}}
   if(path==='/api/mcps'&&method==='GET')return {mcps:mockData.mcps};
   if(path==='/api/mcps'&&method==='POST'){const cfg=JSON.parse(options.body);const m={id:'mcp_'+Date.now(),...cfg};mockData.mcps.push(m);return {mcp:m}}
   const m=path.match(/^\/api\/mcps\/([^/]+)(?:\/(probe|tools|call))?$/);
   if(m){const id=m[1],action=m[2];
     if(method==='DELETE'){mockData.mcps=mockData.mcps.filter(x=>x.id!==id);return {ok:true}}
     if(method==='PUT'){const cfg=JSON.parse(options.body);const i=mockData.mcps.findIndex(x=>x.id===id);mockData.mcps[i]={...mockData.mcps[i],...cfg};return {mcp:mockData.mcps[i]}}
-    if(action==='probe')return {mcp_id:id,state:'healthy',tools:mockData.tools[id]||[],checked_at:new Date().toISOString()};
-    if(action==='tools')return {tools:mockData.tools[id]||[]};
-    if(action==='call')return {content:[{type:'text',text:'mock result'}],structuredContent:{ok:true,arguments:JSON.parse(options.body).arguments||{}}};
+    if(action==='probe'){const tools=mockData.tools[id]||[];mockData.runtime[id]={mcp_id:id,state:'connected',tool_count:tools.length,connected_at:new Date().toISOString(),last_used_at:new Date().toISOString()};return {mcp_id:id,state:'healthy',tools,checked_at:new Date().toISOString()}}
+    if(action==='tools'){const tools=mockData.tools[id]||[];mockData.runtime[id]={mcp_id:id,state:'connected',tool_count:tools.length,connected_at:new Date().toISOString(),last_used_at:new Date().toISOString()};return {tools}}
+    if(action==='call'){const current=mockData.runtime[id]||{mcp_id:id,state:'connected',tool_count:(mockData.tools[id]||[]).length,connected_at:new Date().toISOString()};mockData.runtime[id]={...current,state:'connected',last_used_at:new Date().toISOString()};return {content:[{type:'text',text:'mock result'}],structuredContent:{ok:true,arguments:JSON.parse(options.body).arguments||{}}}};
   }
   if(path==='/.well-known/oauth-authorization-server')return {issuer:location.origin,authorization_endpoint:location.origin+'/oauth/authorize',token_endpoint:location.origin+'/oauth/token',registration_endpoint:location.origin+'/oauth/register',code_challenge_methods_supported:['S256']};
   throw new Error('Mock endpoint not implemented: '+method+' '+path);
@@ -104,20 +107,33 @@ function switchPage(page){
   if(page==='logs')loadAudit().catch(error=>toast(error.message));
 }
 async function loadMCPs(){
-  const result=await api('/api/mcps');state.mcps=result.mcps||[];renderMCPs();renderDashboard();refreshToolMCPSelect();
+  const [result,runtimeResult]=await Promise.all([api('/api/mcps'),api('/api/runtime')]);
+  state.mcps=result.mcps||[];
+  state.runtime=new Map((runtimeResult.runtime||[]).map(item=>[item.mcp_id,item]));
+  renderMCPs();renderDashboard();refreshToolMCPSelect();
+}
+async function loadRuntimeStatuses(){
+  const result=await api('/api/runtime');
+  state.runtime=new Map((result.runtime||[]).map(item=>[item.mcp_id,item]));
+  renderMCPs();renderDashboard();
 }
 function renderMCPs(){
   const q=el('mcp-search').value.trim().toLowerCase();
   const items=state.mcps.filter(m=>!q||[m.name,m.endpoint,m.executable,m.transport].some(v=>String(v||'').toLowerCase().includes(q)));
   const body=el('mcp-rows');body.innerHTML='';
   for(const m of items){
-    const health=state.health.get(m.id),status=health?.state==='healthy'?'<span class="status ok">在线</span>':health?.state==='error'?'<span class="status bad">异常</span>':'<span class="status">未探测</span>';
-    const tools=health?.tools?.length??state.tools.get(m.id)?.length??'—';
+    const health=state.health.get(m.id),runtime=state.runtime.get(m.id);
+    let status='<span class="status">未连接</span>';
+    if(runtime?.state==='connected'||health?.state==='healthy')status='<span class="status ok">已连接</span>';
+    else if(runtime?.state==='error'||health?.state==='error')status='<span class="status bad">异常</span>';
+    const tools=state.tools.get(m.id)?.length??health?.tools?.length??runtime?.tool_count??'—';
     const where=m.transport==='stdio'?escapeHTML([m.executable,...(m.args||[])].join(' ')):escapeHTML(m.endpoint||'');
+    const disconnect=runtime?.state==='connected'?'<button class="button ghost small" data-op="disconnect">断开</button> ':'';
     const tr=document.createElement('tr');
-    tr.innerHTML='<td><strong>'+escapeHTML(m.name)+'</strong><br><small class="muted">'+escapeHTML(m.id)+'</small></td><td>'+escapeHTML(m.transport)+'</td><td>'+status+'</td><td>'+tools+'</td><td><span class="muted">'+where+'</span></td><td><div class="row"><button class="button small" data-op="probe">探测</button><button class="button small" data-op="test">测试</button><button class="button ghost small" data-op="edit">编辑</button><button class="button ghost small" data-op="delete">删除</button></div></td>';
+    tr.innerHTML='<td><strong>'+escapeHTML(m.name)+'</strong><br><small class="muted">'+escapeHTML(m.id)+'</small></td><td>'+escapeHTML(m.transport)+'</td><td>'+status+'</td><td>'+tools+'</td><td><span class="muted">'+where+'</span></td><td><div class="row"><button class="button small" data-op="probe">刷新</button><button class="button small" data-op="test">测试</button>'+disconnect+'<button class="button ghost small" data-op="edit">编辑</button><button class="button ghost small" data-op="delete">删除</button></div></td>';
     tr.querySelector('[data-op="probe"]').onclick=()=>probeMCP(m.id);
     tr.querySelector('[data-op="test"]').onclick=()=>{switchPage('tools');el('tool-mcp').value=m.id;loadTools(m.id)};
+    tr.querySelector('[data-op="disconnect"]')?.addEventListener('click',()=>disconnectMCP(m.id));
     tr.querySelector('[data-op="edit"]').onclick=()=>openMCPDialog(m);
     tr.querySelector('[data-op="delete"]').onclick=()=>deleteMCP(m);
     body.appendChild(tr);
@@ -126,18 +142,18 @@ function renderMCPs(){
 }
 function renderDashboard(){
   el('metric-mcps').textContent=state.mcps.length;
-  const online=[...state.health.values()].filter(x=>x.state==='healthy').length;
+  const online=state.mcps.filter(m=>state.runtime.get(m.id)?.state==='connected'||state.health.get(m.id)?.state==='healthy').length;
   el('metric-online').textContent=online;
-  let tools=0;for(const list of state.tools.values())tools+=list.length;for(const h of state.health.values())if(h.tools)tools=Math.max(tools,h.tools.length);
+  let tools=0;for(const m of state.mcps)tools+=state.tools.get(m.id)?.length??state.health.get(m.id)?.tools?.length??state.runtime.get(m.id)?.tool_count??0;
   el('metric-tools').textContent=tools;el('metric-mcps-sub').textContent=state.mcps.length?'已加载配置':'尚未添加';
   const box=el('dashboard-list');box.innerHTML='';
   if(!state.mcps.length){box.className='empty';box.textContent='暂无 MCP 服务';return}
   box.className='service-list';
-  for(const m of state.mcps.slice(0,6)){const row=document.createElement('div');row.className='service-item';const h=state.health.get(m.id);row.innerHTML='<div><strong>'+escapeHTML(m.name)+'</strong><small>'+escapeHTML(m.transport)+' · '+escapeHTML(m.endpoint||m.executable||'')+'</small></div>'+(h?.state==='healthy'?'<span class="status ok">在线</span>':'<span class="status">未探测</span>');box.appendChild(row)}
+  for(const m of state.mcps.slice(0,6)){const row=document.createElement('div');row.className='service-item';const h=state.health.get(m.id),runtime=state.runtime.get(m.id);let status='<span class="status">未连接</span>';if(runtime?.state==='connected'||h?.state==='healthy')status='<span class="status ok">已连接</span>';else if(runtime?.state==='error'||h?.state==='error')status='<span class="status bad">异常</span>';row.innerHTML='<div><strong>'+escapeHTML(m.name)+'</strong><small>'+escapeHTML(m.transport)+' · '+escapeHTML(m.endpoint||m.executable||'')+'</small></div>'+status;box.appendChild(row)}
 }
 async function probeMCP(id){
-  try{toast('正在探测…');const result=await api('/api/mcps/'+encodeURIComponent(id)+'/probe',{method:'POST'});state.health.set(id,result);if(result.tools)state.tools.set(id,result.tools);renderMCPs();renderDashboard();toast(result.state==='healthy'?'探测成功':'探测完成：'+result.state)}
-  catch(error){state.health.set(id,{state:'error',message:error.message});renderMCPs();toast('探测失败：'+error.message)}
+  try{toast('正在刷新…');const result=await api('/api/mcps/'+encodeURIComponent(id)+'/probe',{method:'POST'});state.health.set(id,result);if(result.tools)state.tools.set(id,result.tools);await loadRuntimeStatuses();toast(result.state==='healthy'?'刷新成功':'刷新完成：'+result.state)}
+  catch(error){state.health.set(id,{state:'error',message:error.message});await loadRuntimeStatuses().catch(()=>{});renderMCPs();toast('刷新失败：'+error.message)}
 }
 async function probeAll(){for(const m of state.mcps)await probeMCP(m.id)}
 function openMCPDialog(m=null){
@@ -154,6 +170,13 @@ async function saveMCP(event){
   catch(error){showError(el('mcp-form-error'),error)}
 }
 async function deleteMCP(m){if(!confirm('删除 MCP “'+m.name+'”？'))return;try{await api('/api/mcps/'+encodeURIComponent(m.id),{method:'DELETE'});state.health.delete(m.id);state.tools.delete(m.id);await loadMCPs();toast('已删除')}catch(error){toast(error.message)}}
+async function disconnectMCP(id){
+  try{
+    await api('/api/runtime/'+encodeURIComponent(id)+'/disconnect',{method:'POST'});
+    state.health.delete(id);state.tools.delete(id);await loadRuntimeStatuses();toast('Session 已断开');
+  }catch(error){toast('断开失败：'+error.message)}
+}
+
 function openImportDialog(){
   clearError(el('import-error'));
   if(!el('import-content').value.trim())el('import-content').value='{'+'\n  "mcpServers": {'+'\n    "example": {'+'\n      "url": "https://example.com/mcp"'+'\n    }'+'\n  }'+'\n}';
@@ -199,11 +222,11 @@ function refreshToolMCPSelect(){
   const select=el('tool-mcp'),current=select.value;select.innerHTML='';
   for(const m of state.mcps){const o=document.createElement('option');o.value=m.id;o.textContent=m.name;select.appendChild(o)}
   if(current&&state.mcps.some(m=>m.id===current))select.value=current;
-  if(select.value)loadTools(select.value);else{el('tool-list').innerHTML='<div class="empty">暂无 MCP</div>';selectTool(null)}
+  if(select.value&&state.page==='tools')loadTools(select.value);else if(!select.value){el('tool-list').innerHTML='<div class="empty">暂无 MCP</div>';selectTool(null)}
 }
 async function loadTools(id){
-  try{const result=await api('/api/mcps/'+encodeURIComponent(id)+'/tools');state.tools.set(id,result.tools||[]);renderToolList(result.tools||[]);renderDashboard()}
-  catch(error){el('tool-list').innerHTML='<div class="form-error">'+escapeHTML(error.message)+'</div>'}
+  try{const result=await api('/api/mcps/'+encodeURIComponent(id)+'/tools');state.tools.set(id,result.tools||[]);renderToolList(result.tools||[]);await loadRuntimeStatuses()}
+  catch(error){el('tool-list').innerHTML='<div class="form-error">'+escapeHTML(error.message)+'</div>';await loadRuntimeStatuses().catch(()=>{})}
 }
 function renderToolList(tools){
   const box=el('tool-list');box.innerHTML='';if(!tools.length){box.innerHTML='<div class="empty">未发现工具</div>';selectTool(null);return}

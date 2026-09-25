@@ -71,7 +71,7 @@
         </div>
         <div class="metrics">
           <article class="metric"><span>MCP 服务</span><strong id="metric-mcps">0</strong><small id="metric-mcps-sub">尚未加载</small></article>
-          <article class="metric"><span>在线服务</span><strong id="metric-online">0</strong><small>最近探测成功</small></article>
+          <article class="metric"><span>已连接服务</span><strong id="metric-online">0</strong><small>当前复用 Session</small></article>
           <article class="metric"><span>已发现工具</span><strong id="metric-tools">0</strong><small>来自已探测服务</small></article>
           <article class="metric"><span>授权方式</span><strong>4</strong><small>OAuth / Bearer / Header / Query</small></article>
         </div>
@@ -85,7 +85,7 @@
         <div class="page-head">
           <div><h1>MCP 服务</h1><p>管理上游 MCP 定义、连接和工具发现。</p></div>
           <div class="row">
-            <button id="probe-all" class="button">探测全部</button>
+            <button id="probe-all" class="button">刷新全部</button>
             <button id="open-import" class="button">导入</button>
             <select id="export-format" class="button"><option value="mcp-center">MCP Center 格式</option><option value="mcpServers">通用 mcpServers</option></select>
             <button id="export-mcps" class="button">导出</button>
@@ -173,6 +173,7 @@
           <div class="setting"><div><strong>OAuth</strong><span>Authorization Code + PKCE</span></div><span class="status ok">已接入</span></div>
           <div class="setting"><div><strong>Bearer / Header / Query</strong><span>统一 Access Credential，可独立开关授权入口</span></div><span class="status ok">已接入</span></div>
           <div class="setting"><div><strong>调用审计</strong><span>JSONL 持久化，参数仅记录键名和类型</span></div><span class="status ok">已接入</span></div>
+          <div class="setting"><div><strong>Runtime Session Manager</strong><span>连接复用、tools/list 缓存、刷新、断开、配置变更自动失效</span></div><span class="status ok">已接入</span></div>
         </div>
       </section>
     </main>

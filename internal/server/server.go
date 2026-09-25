@@ -107,6 +107,10 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("POST /api/mcps/import", a.requireAdmin(http.HandlerFunc(a.handleMCPImport)))
 	mux.Handle("GET /api/mcps/export", a.requireAdmin(http.HandlerFunc(a.handleMCPExport)))
 
+	mux.Handle("GET /api/runtime", a.requireAdmin(http.HandlerFunc(a.handleRuntimeList)))
+	mux.Handle("POST /api/runtime/{id}/refresh", a.requireAdmin(http.HandlerFunc(a.handleRuntimeRefresh)))
+	mux.Handle("POST /api/runtime/{id}/disconnect", a.requireAdmin(http.HandlerFunc(a.handleRuntimeDisconnect)))
+
 	mux.Handle("GET /api/access/settings", a.requireAdmin(http.HandlerFunc(a.handleAccessSettingsGet)))
 	mux.Handle("PUT /api/access/settings", a.requireAdmin(http.HandlerFunc(a.handleAccessSettingsUpdate)))
 	mux.Handle("GET /api/access/credentials", a.requireAdmin(http.HandlerFunc(a.handleAccessCredentialList)))

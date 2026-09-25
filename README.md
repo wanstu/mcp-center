@@ -32,9 +32,12 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - MCP 导入 / 导出：MCP Center 与通用 mcpServers 格式
 - 导入冲突策略：报错 / 跳过 / 按名称更新，完整预检后原子写入
 
+- Runtime Session Manager：复用上游 Session、tools/list 缓存、刷新/断开、运行时状态
+- 配置更新 / 删除 / 导入后自动失效旧 Session
+
 开发中：
 
-- Runtime Session Manager
+- 管理员账号设置与修改密码
 - 更完整设置页面
 
 ## 本地启动

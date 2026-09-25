@@ -36,6 +36,15 @@ async function mockApi(path,options){
   if(path==='/api/access/credentials'&&method==='POST'){const input=JSON.parse(options.body),secret='mcp_mock_'+Date.now(),item={id:'cred_'+Date.now(),secret_prefix:secret.slice(0,12),created_at:new Date().toISOString(),updated_at:new Date().toISOString(),last_used_at:null,...input};mockData.credentials.push(item);return {credential:item,secret}}
   const cred=path.match(/^\/api\/access\/credentials\/([^/]+)$/);
   if(cred){const id=cred[1];if(method==='DELETE'){mockData.credentials=mockData.credentials.filter(x=>x.id!==id);return {ok:true}}if(method==='PUT'){const input=JSON.parse(options.body),i=mockData.credentials.findIndex(x=>x.id===id);mockData.credentials[i]={...mockData.credentials[i],...input,updated_at:new Date().toISOString()};return {credential:mockData.credentials[i]}}}
+  if(path==='/api/mcps/import'&&method==='POST'){
+    const request=JSON.parse(options.body),doc=JSON.parse(request.content),configs=[];
+    if(doc.mcpServers){for(const [name,item] of Object.entries(doc.mcpServers)){configs.push(item.url?{name,transport:'streamable-http',auth_mode:item.headers?'headers':'none',endpoint:item.url,header_refs:item.headers||undefined,health_policy:{}}:{name,transport:'stdio',auth_mode:'none',executable:item.command,args:item.args||[],env_refs:item.env||undefined,health_policy:{}})}}
+    else if(Array.isArray(doc.mcps))configs.push(...doc.mcps);
+    else throw new Error('无法识别导入格式');
+    let added=0,updated=0,skipped=0;
+    for(const cfg of configs){const i=mockData.mcps.findIndex(x=>x.name.toLowerCase()===String(cfg.name||'').toLowerCase());if(i>=0){if(request.conflict==='error')throw new Error('MCP 已存在: '+cfg.name);if(request.conflict==='skip'){skipped++;continue}mockData.mcps[i]={...mockData.mcps[i],...cfg};updated++;continue}mockData.mcps.push({id:'mcp_'+Date.now()+'_'+added,...cfg});added++}
+    return {added,updated,skipped,items:[]};
+  }
   if(path==='/api/mcps'&&method==='GET')return {mcps:mockData.mcps};
   if(path==='/api/mcps'&&method==='POST'){const cfg=JSON.parse(options.body);const m={id:'mcp_'+Date.now(),...cfg};mockData.mcps.push(m);return {mcp:m}}
   const m=path.match(/^\/api\/mcps\/([^/]+)(?:\/(probe|tools|call))?$/);
@@ -145,6 +154,46 @@ async function saveMCP(event){
   catch(error){showError(el('mcp-form-error'),error)}
 }
 async function deleteMCP(m){if(!confirm('删除 MCP “'+m.name+'”？'))return;try{await api('/api/mcps/'+encodeURIComponent(m.id),{method:'DELETE'});state.health.delete(m.id);state.tools.delete(m.id);await loadMCPs();toast('已删除')}catch(error){toast(error.message)}}
+function openImportDialog(){
+  clearError(el('import-error'));
+  if(!el('import-content').value.trim())el('import-content').value='{'+'\n  "mcpServers": {'+'\n    "example": {'+'\n      "url": "https://example.com/mcp"'+'\n    }'+'\n  }'+'\n}';
+  el('import-dialog').showModal();
+}
+async function importMCPs(event){
+  event.preventDefault();clearError(el('import-error'));
+  const payload={format:el('import-format').value,conflict:el('import-conflict').value,content:el('import-content').value};
+  try{
+    const result=await api('/api/mcps/import',{method:'POST',body:JSON.stringify(payload)});
+    state.health.clear();state.tools.clear();el('import-dialog').close();await loadMCPs();
+    toast('导入完成：新增 '+result.added+'，更新 '+result.updated+'，跳过 '+result.skipped);
+  }catch(error){showError(el('import-error'),error)}
+}
+async function exportMCPs(){
+  const format=el('export-format').value;
+  if(state.mock){
+    let doc;
+    if(format==='mcpServers'){
+      const servers={};
+      for(const m of mockData.mcps){servers[m.name]=m.transport==='stdio'?{command:m.executable,args:m.args||[],env:m.env_refs||undefined}:{url:m.endpoint,headers:m.header_refs||undefined}}
+      doc={mcpServers:servers};
+    }else{
+      doc={version:1,mcps:mockData.mcps.map(({id,created_at,updated_at,...m})=>m)};
+    }
+    downloadJSON(JSON.stringify(doc,null,2),format==='mcpServers'?'mcp-servers-export.json':'mcp-center-export.json');return;
+  }
+  try{
+    const response=await fetch('/api/mcps/export?format='+encodeURIComponent(format),{credentials:'same-origin'});
+    if(!response.ok){let payload=null;try{payload=await response.json()}catch{}throw new Error(payload?.error||('HTTP '+response.status))}
+    const blob=await response.blob();
+    const disposition=response.headers.get('Content-Disposition')||'';
+    const match=disposition.match(/filename="([^"]+)"/);
+    downloadBlob(blob,match?.[1]||(format==='mcpServers'?'mcp-servers-export.json':'mcp-center-export.json'));
+    toast('导出完成');
+  }catch(error){toast('导出失败：'+error.message)}
+}
+function downloadJSON(content,filename){downloadBlob(new Blob([content],{type:'application/json;charset=utf-8'}),filename)}
+function downloadBlob(blob,filename){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+
 
 function refreshToolMCPSelect(){
   const select=el('tool-mcp'),current=select.value;select.innerHTML='';
@@ -268,11 +317,15 @@ document.addEventListener('click',event=>{
   if(event.target.closest('[data-action="open-add"]'))openMCPDialog();
   if(event.target.closest('[data-action="close-dialog"]'))el('mcp-dialog').close();
   if(event.target.closest('[data-action="close-credential-dialog"]'))el('credential-dialog').close();
+  if(event.target.closest('[data-action="close-import-dialog"]'))el('import-dialog').close();
 });
 el('auth-form').addEventListener('submit',submitAuth);
 el('logout').onclick=async()=>{try{await api('/api/auth/logout',{method:'POST'})}finally{state.user=null;showAuth(false)}};
 el('refresh').onclick=async()=>{try{await loadMCPs();toast('已刷新')}catch(error){toast(error.message)}};
 el('probe-all').onclick=probeAll;
+el('open-import').onclick=openImportDialog;
+el('export-mcps').onclick=exportMCPs;
+el('import-form').addEventListener('submit',importMCPs);
 el('mcp-search').addEventListener('input',renderMCPs);
 el('mcp-transport').addEventListener('change',updateTransportFields);
 el('mcp-form').addEventListener('submit',saveMCP);

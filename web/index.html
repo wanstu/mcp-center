@@ -84,7 +84,13 @@
       <section id="page-mcps" class="page">
         <div class="page-head">
           <div><h1>MCP 服务</h1><p>管理上游 MCP 定义、连接和工具发现。</p></div>
-          <div class="row"><button id="probe-all" class="button">探测全部</button><button class="button primary" data-action="open-add">添加 MCP</button></div>
+          <div class="row">
+            <button id="probe-all" class="button">探测全部</button>
+            <button id="open-import" class="button">导入</button>
+            <select id="export-format" class="button"><option value="mcp-center">MCP Center 格式</option><option value="mcpServers">通用 mcpServers</option></select>
+            <button id="export-mcps" class="button">导出</button>
+            <button class="button primary" data-action="open-add">添加 MCP</button>
+          </div>
         </div>
         <div class="panel">
           <div class="toolbar">
@@ -171,6 +177,20 @@
       </section>
     </main>
   </div>
+
+  <dialog id="import-dialog" class="dialog">
+    <form id="import-form" method="dialog">
+      <div class="dialog-head"><div><h2>导入 MCP</h2><p>支持 MCP Center 格式和常见的 mcpServers JSON。导入会先完整预检，失败时不会写入半份配置。</p></div><button type="button" class="icon-button" data-action="close-import-dialog">×</button></div>
+      <div class="form-grid">
+        <label class="field">格式<select id="import-format"><option value="auto">自动识别</option><option value="mcp-center">MCP Center</option><option value="mcpServers">mcpServers</option></select></label>
+        <label class="field">名称冲突<select id="import-conflict"><option value="error">报错并停止</option><option value="skip">跳过已存在</option><option value="update_by_name">按名称更新</option></select></label>
+        <label class="field span-2">配置 JSON<textarea id="import-content" rows="16" spellcheck="false" placeholder='{"mcpServers":{"example":{"url":"https://example.com/mcp"}}}'></textarea></label>
+      </div>
+      <div class="notice">安全要求：导入 Header / env 中的密钥必须使用环境变量引用，例如 <code>${TOKEN}</code>；不会接受明文 Secret。</div>
+      <p id="import-error" class="form-error hidden"></p>
+      <div class="dialog-actions"><button type="button" class="button" data-action="close-import-dialog">取消</button><button type="submit" class="button primary">预检并导入</button></div>
+    </form>
+  </dialog>
 
   <dialog id="credential-dialog" class="dialog">
     <form id="credential-form" method="dialog">

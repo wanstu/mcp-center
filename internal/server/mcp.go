@@ -152,6 +152,12 @@ func (a *App) invalidateProxy(id string) {
 	a.proxyMu.Unlock()
 }
 
+func (a *App) invalidateAllProxies() {
+	a.proxyMu.Lock()
+	a.proxies = map[string]http.Handler{}
+	a.proxyMu.Unlock()
+}
+
 func (a *App) writeBearerChallenge(w http.ResponseWriter, id string) {
 	metadata := a.baseURL + "/.well-known/oauth-protected-resource/mcp/" + id
 	w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+metadata+`", scope="mcp:*"`)

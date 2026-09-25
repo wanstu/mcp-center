@@ -96,6 +96,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/login", a.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", a.handleLogout)
 	mux.Handle("GET /api/me", a.requireAdmin(http.HandlerFunc(a.handleMe)))
+	mux.Handle("POST /api/account/password", a.requireAdmin(http.HandlerFunc(a.handleChangePassword)))
 
 	mux.Handle("GET /api/mcps", a.requireAdmin(http.HandlerFunc(a.handleMCPList)))
 	mux.Handle("POST /api/mcps", a.requireAdmin(http.HandlerFunc(a.handleMCPAdd)))

@@ -28,6 +28,7 @@ async function mockApi(path,options){
   if(path==='/api/me')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/auth/login')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/auth/logout')return {ok:true};
+  if(path==='/api/account/password'&&method==='POST')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/access/settings'&&method==='GET')return {settings:mockData.accessSettings};
   if(path==='/api/access/settings'&&method==='PUT'){mockData.accessSettings=JSON.parse(options.body);return {settings:mockData.accessSettings}}
   if(path==='/api/access/credentials'&&method==='GET')return {credentials:mockData.credentials};
@@ -85,6 +86,7 @@ function showAuth(setup){
 async function enterApp(){
   el('auth-screen').classList.add('hidden');el('app').classList.remove('hidden');
   el('me-name').textContent=state.user?.username||'admin';
+  renderAccountSettings();
   await Promise.allSettled([loadMCPs(),loadOAuthMetadata(),loadAccess()]);
 }
 async function submitAuth(event){
@@ -105,6 +107,7 @@ function switchPage(page){
   if(page==='tools')refreshToolMCPSelect();
   if(page==='access')loadAccess().catch(error=>toast(error.message));
   if(page==='logs')loadAudit().catch(error=>toast(error.message));
+  if(page==='settings')renderAccountSettings();
 }
 async function loadMCPs(){
   const [result,runtimeResult]=await Promise.all([api('/api/mcps'),api('/api/runtime')]);
@@ -246,6 +249,28 @@ async function loadOAuthMetadata(){
   try{const meta=await api('/.well-known/oauth-authorization-server');const box=el('oauth-meta');box.innerHTML='';for(const key of ['issuer','authorization_endpoint','token_endpoint','registration_endpoint']){const line=document.createElement('div');line.innerHTML='<strong>'+escapeHTML(key)+'</strong><div class="muted">'+escapeHTML(meta[key]||'—')+'</div>';box.appendChild(line)}}
   catch(error){el('oauth-meta').innerHTML='<span class="form-error">'+escapeHTML(error.message)+'</span>'}
 }
+function renderAccountSettings(){
+  const input=el('settings-username');
+  if(input)input.value=state.user?.username||'admin';
+}
+async function changePassword(){
+  clearError(el('settings-password-error'));
+  const current=el('settings-current-password').value;
+  const next=el('settings-new-password').value;
+  const confirmPassword=el('settings-confirm-password').value;
+  if(next!==confirmPassword){showError(el('settings-password-error'),'两次输入的新密码不一致');return}
+  if(next.length<10){showError(el('settings-password-error'),'新密码至少需要 10 位');return}
+  try{
+    const result=await api('/api/account/password',{method:'POST',body:JSON.stringify({current_password:current,new_password:next})});
+    state.user=result.user;
+    el('me-name').textContent=state.user?.username||'admin';
+    renderAccountSettings();
+    el('settings-current-password').value='';
+    el('settings-new-password').value='';
+    el('settings-confirm-password').value='';
+    toast('密码已修改，其他登录会话已失效');
+  }catch(error){showError(el('settings-password-error'),error)}
+}
 async function loadAccess(){
   const [settingsResult,credentialsResult]=await Promise.all([api('/api/access/settings'),api('/api/access/credentials')]);
   state.accessSettings=settingsResult.settings;state.credentials=credentialsResult.credentials||[];
@@ -362,4 +387,5 @@ el('copy-secret').onclick=async()=>{try{await navigator.clipboard.writeText(el('
 el('refresh-audit').onclick=()=>loadAudit().then(()=>toast('日志已刷新')).catch(error=>toast(error.message));
 el('clear-audit').onclick=clearAudit;
 el('audit-search').addEventListener('input',renderAudit);
+el('change-password').onclick=changePassword;
 bootstrap();

@@ -168,12 +168,26 @@
       </section>
 
       <section id="page-settings" class="page">
-        <div class="page-head"><div><h1>设置</h1><p>服务地址、授权通道和日志策略。</p></div></div>
-        <div class="panel">
-          <div class="setting"><div><strong>OAuth</strong><span>Authorization Code + PKCE</span></div><span class="status ok">已接入</span></div>
-          <div class="setting"><div><strong>Bearer / Header / Query</strong><span>统一 Access Credential，可独立开关授权入口</span></div><span class="status ok">已接入</span></div>
-          <div class="setting"><div><strong>调用审计</strong><span>JSONL 持久化，参数仅记录键名和类型</span></div><span class="status ok">已接入</span></div>
-          <div class="setting"><div><strong>Runtime Session Manager</strong><span>连接复用、tools/list 缓存、刷新、断开、配置变更自动失效</span></div><span class="status ok">已接入</span></div>
+        <div class="page-head"><div><h1>设置</h1><p>管理员账号和 MCP Center 当前能力状态。</p></div></div>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-head"><div><h2>管理员账号</h2><p>首版只维护管理员账号；普通账号后续再开放。</p></div><span class="status ok">Admin</span></div>
+            <div class="stack">
+              <label class="field">用户名<input id="settings-username" readonly></label>
+              <label class="field">当前密码<input id="settings-current-password" type="password" autocomplete="current-password"></label>
+              <label class="field">新密码<input id="settings-new-password" type="password" autocomplete="new-password" minlength="10" placeholder="至少 10 位"></label>
+              <label class="field">确认新密码<input id="settings-confirm-password" type="password" autocomplete="new-password" minlength="10"></label>
+              <p id="settings-password-error" class="form-error hidden"></p>
+              <div class="row end"><button id="change-password" class="button primary">修改密码</button></div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><h2>能力状态</h2><p>当前控制程序已启用的核心能力。</p></div></div>
+            <div class="setting"><div><strong>OAuth</strong><span>Authorization Code + PKCE</span></div><span class="status ok">已接入</span></div>
+            <div class="setting"><div><strong>Bearer / Header / Query</strong><span>统一 Access Credential，可独立开关授权入口</span></div><span class="status ok">已接入</span></div>
+            <div class="setting"><div><strong>调用审计</strong><span>JSONL 持久化，参数仅记录键名和类型</span></div><span class="status ok">已接入</span></div>
+            <div class="setting"><div><strong>Runtime Session Manager</strong><span>连接复用、tools/list 缓存、刷新、断开、配置变更自动失效</span></div><span class="status ok">已接入</span></div>
+          </div>
         </div>
       </section>
     </main>

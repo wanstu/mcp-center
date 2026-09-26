@@ -513,13 +513,12 @@ function openCredentialDialog(item=null){
   el('credential-bearer').checked=item?Boolean(item.allow_bearer):true;
   el('credential-header').checked=item?Boolean(item.allow_header):true;
   el('credential-query').checked=item?Boolean(item.allow_query):false;
-  el('credential-scopes').value=(item?.scopes||['mcp:*']).join(' ');
   clearError(el('credential-form-error'));el('credential-dialog').showModal();
 }
 async function saveCredential(event){
   event.preventDefault();clearError(el('credential-form-error'));
   const id=el('credential-id').value.trim();
-  const payload={name:el('credential-name').value.trim(),enabled:el('credential-enabled').checked,allow_bearer:el('credential-bearer').checked,allow_header:el('credential-header').checked,allow_query:el('credential-query').checked,scopes:el('credential-scopes').value.split(/\s+/).filter(Boolean)};
+  const payload={name:el('credential-name').value.trim(),enabled:el('credential-enabled').checked,allow_bearer:el('credential-bearer').checked,allow_header:el('credential-header').checked,allow_query:el('credential-query').checked,scopes:['mcp:*']};
   try{
     const result=await api(id?'/api/access/credentials/'+encodeURIComponent(id):'/api/access/credentials',{method:id?'PUT':'POST',body:JSON.stringify(payload)});
     el('credential-dialog').close();await loadAccess();

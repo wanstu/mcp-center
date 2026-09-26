@@ -108,3 +108,29 @@ func TestAccessCredentialAPIAndChannels(t *testing.T) {
 		t.Fatalf("expected ambiguous credential error, got %v", err)
 	}
 }
+
+func TestAccessCredentialAPIRejectsUnsupportedScopes(t *testing.T) {
+	app := newTestApp(t)
+	session := bootstrapSession(t, app)
+	handler := app.Handler()
+
+	rec := requestJSON(t, handler, http.MethodPost, "/api/access/credentials", map[string]any{
+		"name":         "readonly",
+		"enabled":      true,
+		"allow_bearer": true,
+		"scopes":       []string{"mcp:read"},
+	}, session)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "only mcp:*") {
+		t.Fatalf("unsupported scope = %d %s", rec.Code, rec.Body.String())
+	}
+
+	ok := requestJSON(t, handler, http.MethodPost, "/api/access/credentials", map[string]any{
+		"name":         "full",
+		"enabled":      true,
+		"allow_bearer": true,
+		"scopes":       []string{"mcp:*"},
+	}, session)
+	if ok.Code != http.StatusCreated {
+		t.Fatalf("mcp:* scope = %d %s", ok.Code, ok.Body.String())
+	}
+}

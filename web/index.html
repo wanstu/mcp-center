@@ -286,7 +286,7 @@
         <label class="check"><input id="credential-bearer" type="checkbox" checked> Bearer</label>
         <label class="check"><input id="credential-header" type="checkbox" checked> Header</label>
         <label class="check"><input id="credential-query" type="checkbox"> Query</label>
-        <label class="field span-2">Scopes（空格分隔）<input id="credential-scopes" value="mcp:*"></label>
+        <label class="field span-2">Scope<input value="mcp:*" readonly><small>当前版本统一使用 <code>mcp:*</code>；细粒度工具权限后续单独实现。</small></label>
       </div>
       <p id="credential-form-error" class="form-error hidden"></p>
       <div class="dialog-actions"><button type="button" class="button" data-action="close-credential-dialog">取消</button><button type="submit" class="button primary">保存</button></div>

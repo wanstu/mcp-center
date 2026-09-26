@@ -203,10 +203,8 @@ Query
 
 ## 9. Scope
 
-首版可以简单：
+当前首版只开放：
 
-- `mcp:read`：initialize / tools/list / resources read 等只读协议操作
-- `mcp:call`：tools/call
-- `mcp:*`：全部
+- `mcp:*`：允许访问目标 MCP Resource 的全部协议能力
 
-后续再增加按 MCP / Tool 的细粒度限制。不要首版就做复杂 ACL。
+`mcp:read`、`mcp:call` 以及按 MCP / Tool 的细粒度 Scope 暂不开放。等代理层真正能按 MCP method 做授权判断后再启用，避免出现“配置看起来生效、实际请求仍被拒绝”的伪权限。

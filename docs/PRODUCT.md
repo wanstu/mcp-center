@@ -89,7 +89,7 @@ MCP Center 是 `mcp-center-core` 的独立控制面板和服务宿主。
 
 **OAuth**
 
-提供标准 OAuth 授权入口，至少覆盖 MCP 客户端常见的 Authorization Code + PKCE。
+提供标准 OAuth 授权入口，至少覆盖 MCP 客户端常见的 Authorization Code + PKCE。首版 Scope 统一使用 `mcp:*`；细粒度 Scope 后续再开放。
 
 控制台展示：
 

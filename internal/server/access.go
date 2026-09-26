@@ -60,6 +60,10 @@ func (a *App) handleAccessCredentialCreate(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if err := validateCenterAccessScopes(input.Scopes); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	created, err := a.access.Create(input)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -71,6 +75,10 @@ func (a *App) handleAccessCredentialCreate(w http.ResponseWriter, r *http.Reques
 func (a *App) handleAccessCredentialUpdate(w http.ResponseWriter, r *http.Request) {
 	var input accesscore.UpdateInput
 	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := validateCenterAccessScopes(input.Scopes); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -88,6 +96,16 @@ func (a *App) handleAccessCredentialDelete(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func validateCenterAccessScopes(scopes []string) error {
+	if len(scopes) == 0 {
+		return nil
+	}
+	if len(scopes) != 1 || strings.TrimSpace(scopes[0]) != "mcp:*" {
+		return errors.New("this version supports only mcp:* scope")
+	}
+	return nil
 }
 
 func (a *App) authenticateMCPRequest(r *http.Request, id string) (mcpPrincipal, error) {

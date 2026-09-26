@@ -279,11 +279,21 @@
       <div class="form-grid">
         <label class="field">名称<input id="mcp-name" required></label>
         <label class="field">Transport<select id="mcp-transport"><option value="streamable-http">Streamable HTTP</option><option value="stdio">stdio</option></select></label>
-        <label class="field span-2 http-only">Endpoint<input id="mcp-endpoint" placeholder="https://example.com/mcp"></label>
+        <label class="field span-2 http-only">Endpoint
+          <input id="mcp-endpoint" placeholder="https://example.com/mcp">
+          <small>可直接填写 URL，也可使用环境变量模板。</small>
+        </label>
         <label class="field stdio-only hidden">Executable<input id="mcp-executable" placeholder="node"></label>
-        <label class="field stdio-only hidden">Args（每行一个）<textarea id="mcp-args" rows="4"></textarea></label>
-        <label class="field http-only">Auth Mode<select id="mcp-auth"><option value="none">None</option><option value="headers">Secret-backed Headers</option></select></label>
-        <label class="check"><input id="mcp-default" type="checkbox"> 默认包含</label>
+        <label class="field stdio-only hidden">Args（每行一个）<textarea id="mcp-args" rows="4" placeholder="server.js&#10;--stdio"></textarea></label>
+        <label class="field span-2 stdio-only hidden">环境变量（每行 KEY=VALUE）
+          <textarea id="mcp-env" rows="4" spellcheck="false" placeholder="API_KEY=${MCP_API_KEY}"></textarea>
+          <small>VALUE 必须使用环境变量引用，例如 <code>${MCP_API_KEY}</code>，不会保存明文密钥。</small>
+        </label>
+        <label class="field span-2 http-only">认证方式<select id="mcp-auth"><option value="none">无</option><option value="headers">请求头（环境变量引用）</option></select></label>
+        <label class="field span-2 http-only header-auth-only hidden">请求头（每行 Header=VALUE）
+          <textarea id="mcp-headers" rows="4" spellcheck="false" placeholder="Authorization=Bearer ${MCP_TOKEN}&#10;X-API-Key=${API_KEY}"></textarea>
+          <small>VALUE 必须包含环境变量引用，MCP Center 运行时再解析。</small>
+        </label>
       </div>
       <p id="mcp-form-error" class="form-error hidden"></p>
       <div class="dialog-actions"><button type="button" class="button" data-action="close-dialog">取消</button><button type="submit" class="button primary">保存</button></div>

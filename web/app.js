@@ -1,5 +1,5 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,accessSettings:null,credentials:[],oauthClients:[],audits:[],page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,editingMCP:null,accessSettings:null,credentials:[],oauthClients:[],audits:[],page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
 const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
@@ -164,18 +164,87 @@ async function probeMCP(id){
   catch(error){state.health.set(id,{state:'error',message:error.message});await loadRuntimeStatuses().catch(()=>{});renderMCPs();toast('刷新失败：'+error.message)}
 }
 async function probeAll(){for(const m of state.mcps)await probeMCP(m.id)}
-function openMCPDialog(m=null){
-  el('mcp-dialog-title').textContent=m?'编辑 MCP':'添加 MCP';el('mcp-id').value=m?.id||'';el('mcp-name').value=m?.name||'';el('mcp-transport').value=m?.transport||'streamable-http';el('mcp-endpoint').value=m?.endpoint||'';el('mcp-executable').value=m?.executable||'';el('mcp-args').value=(m?.args||[]).join('\n');el('mcp-auth').value=m?.auth_mode||'none';el('mcp-default').checked=Boolean(m?.default_include_in_environment);clearError(el('mcp-form-error'));updateTransportFields();el('mcp-dialog').showModal();
+function formatKVMap(input){
+  return Object.entries(input||{}).map(([key,value])=>key+'='+value).join('\n');
 }
-function updateTransportFields(){const stdio=el('mcp-transport').value==='stdio';document.querySelectorAll('.stdio-only').forEach(n=>n.classList.toggle('hidden',!stdio));document.querySelectorAll('.http-only').forEach(n=>n.classList.toggle('hidden',stdio))}
+function parseKVLines(value,label){
+  const out={};
+  for(const [index,raw] of String(value||'').split(/\r?\n/).entries()){
+    const line=raw.trim();
+    if(!line||line.startsWith('#'))continue;
+    const split=line.indexOf('=');
+    if(split<=0)throw new Error(label+' 第 '+(index+1)+' 行格式应为 KEY=VALUE');
+    const key=line.slice(0,split).trim(),item=line.slice(split+1).trim();
+    if(!key||!item)throw new Error(label+' 第 '+(index+1)+' 行 KEY 和 VALUE 都不能为空');
+    if(Object.prototype.hasOwnProperty.call(out,key))throw new Error(label+' 存在重复 KEY：'+key);
+    out[key]=item;
+  }
+  return out;
+}
+function hasEnvRef(value){
+  return /\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[^}]+\})/.test(String(value||''));
+}
+function requireEnvRefs(items,label){
+  for(const [key,value] of Object.entries(items)){
+    if(!hasEnvRef(value))throw new Error(label+' '+key+' 必须使用环境变量引用，例如 ${TOKEN}');
+  }
+}
+function openMCPDialog(m=null){
+  state.editingMCP=m;
+  el('mcp-dialog-title').textContent=m?'编辑 MCP':'添加 MCP';
+  el('mcp-id').value=m?.id||'';
+  el('mcp-name').value=m?.name||'';
+  el('mcp-transport').value=m?.transport||'streamable-http';
+  el('mcp-endpoint').value=m?.endpoint||'';
+  el('mcp-executable').value=m?.executable||'';
+  el('mcp-args').value=(m?.args||[]).join('\n');
+  el('mcp-env').value=formatKVMap(m?.env_refs);
+  el('mcp-auth').value=m?.auth_mode||'none';
+  el('mcp-headers').value=formatKVMap(m?.header_refs);
+  clearError(el('mcp-form-error'));
+  updateTransportFields();
+  el('mcp-dialog').showModal();
+}
+function updateTransportFields(){
+  const stdio=el('mcp-transport').value==='stdio';
+  document.querySelectorAll('.stdio-only').forEach(n=>n.classList.toggle('hidden',!stdio));
+  document.querySelectorAll('.http-only').forEach(n=>n.classList.toggle('hidden',stdio));
+  updateAuthFields();
+}
+function updateAuthFields(){
+  const show=el('mcp-transport').value==='streamable-http'&&el('mcp-auth').value==='headers';
+  document.querySelectorAll('.header-auth-only').forEach(n=>n.classList.toggle('hidden',!show));
+}
 async function saveMCP(event){
   event.preventDefault();clearError(el('mcp-form-error'));
   const id=el('mcp-id').value.trim(),transport=el('mcp-transport').value;
-  const payload={name:el('mcp-name').value.trim(),transport,auth_mode:transport==='stdio'?'none':el('mcp-auth').value,default_include_in_environment:el('mcp-default').checked,health_policy:{health_check_enabled:false,auto_reconnect:false}};
-  if(transport==='stdio'){payload.executable=el('mcp-executable').value.trim();payload.args=el('mcp-args').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean)}
-  else payload.endpoint=el('mcp-endpoint').value.trim();
-  try{await api(id?'/api/mcps/'+encodeURIComponent(id):'/api/mcps',{method:id?'PUT':'POST',body:JSON.stringify(payload)});el('mcp-dialog').close();await loadMCPs();toast(id?'MCP 已更新':'MCP 已添加')}
-  catch(error){showError(el('mcp-form-error'),error)}
+  const payload={
+    name:el('mcp-name').value.trim(),
+    transport,
+    auth_mode:transport==='stdio'?'none':el('mcp-auth').value,
+    default_include_in_environment:Boolean(state.editingMCP?.default_include_in_environment),
+    health_policy:state.editingMCP?.health_policy||{health_check_enabled:false,auto_reconnect:false}
+  };
+  try{
+    if(transport==='stdio'){
+      payload.executable=el('mcp-executable').value.trim();
+      payload.args=el('mcp-args').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+      payload.env_refs=parseKVLines(el('mcp-env').value,'环境变量');
+      requireEnvRefs(payload.env_refs,'环境变量');
+    }else{
+      payload.endpoint=el('mcp-endpoint').value.trim();
+      if(payload.auth_mode==='headers'){
+        payload.header_refs=parseKVLines(el('mcp-headers').value,'请求头');
+        if(!Object.keys(payload.header_refs).length)throw new Error('请求头认证至少需要配置一项 Header');
+        requireEnvRefs(payload.header_refs,'请求头');
+      }
+    }
+    await api(id?'/api/mcps/'+encodeURIComponent(id):'/api/mcps',{method:id?'PUT':'POST',body:JSON.stringify(payload)});
+    state.editingMCP=null;
+    el('mcp-dialog').close();
+    await loadMCPs();
+    toast(id?'MCP 已更新':'MCP 已添加，可点击“刷新”验证连接');
+  }catch(error){showError(el('mcp-form-error'),error)}
 }
 async function deleteMCP(m){if(!confirm('删除 MCP “'+m.name+'”？'))return;try{await api('/api/mcps/'+encodeURIComponent(m.id),{method:'DELETE'});state.health.delete(m.id);state.tools.delete(m.id);await loadMCPs();toast('已删除')}catch(error){toast(error.message)}}
 async function disconnectMCP(id){
@@ -466,6 +535,7 @@ el('import-form').addEventListener('submit',importMCPs);
 el('import-file').addEventListener('change',loadImportFile);
 el('mcp-search').addEventListener('input',renderMCPs);
 el('mcp-transport').addEventListener('change',updateTransportFields);
+el('mcp-auth').addEventListener('change',updateAuthFields);
 el('mcp-form').addEventListener('submit',saveMCP);
 el('tool-mcp').addEventListener('change',event=>loadTools(event.target.value));
 el('tool-call').onclick=callTool;

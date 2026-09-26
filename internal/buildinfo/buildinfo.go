@@ -34,9 +34,6 @@ func Current() Info {
 				info.Modified = setting.Value == "true"
 			}
 		}
-		if info.Version == "dev" && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
-			info.Version = bi.Main.Version
-		}
 	}
 	if len(info.Commit) > 12 {
 		info.Commit = info.Commit[:12]

@@ -237,6 +237,10 @@
       <div class="form-grid">
         <label class="field">格式<select id="import-format"><option value="auto">自动识别</option><option value="mcp-center">MCP Center</option><option value="mcpServers">mcpServers</option></select></label>
         <label class="field">名称冲突<select id="import-conflict"><option value="error">报错并停止</option><option value="skip">跳过已存在</option><option value="update_by_name">按名称更新</option></select></label>
+        <div class="import-file-row span-2">
+          <label class="button import-file-button">选择 JSON 文件<input id="import-file" type="file" accept=".json,application/json" hidden></label>
+          <span id="import-file-name" class="muted">也可以直接在下面粘贴 JSON</span>
+        </div>
         <label class="field span-2">配置 JSON<textarea id="import-content" rows="16" spellcheck="false" placeholder='{"mcpServers":{"example":{"url":"https://example.com/mcp"}}}'></textarea></label>
       </div>
       <div class="notice">安全要求：导入 Header / env 中的密钥必须使用环境变量引用，例如 <code>${TOKEN}</code>；不会接受明文 Secret。</div>

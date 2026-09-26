@@ -190,6 +190,26 @@ function openImportDialog(){
   if(!el('import-content').value.trim())el('import-content').value='{'+'\n  "mcpServers": {'+'\n    "example": {'+'\n      "url": "https://example.com/mcp"'+'\n    }'+'\n  }'+'\n}';
   el('import-dialog').showModal();
 }
+async function loadImportFile(event){
+  clearError(el('import-error'));
+  const file=event.target.files?.[0];
+  if(!file)return;
+  if(file.size>2*1024*1024){
+    showError(el('import-error'),'JSON 文件不能超过 2 MB');
+    event.target.value='';
+    return;
+  }
+  try{
+    const content=await file.text();
+    JSON.parse(content);
+    el('import-content').value=content;
+    el('import-format').value='auto';
+    el('import-file-name').textContent=file.name+' · '+Math.max(1,Math.round(file.size/1024))+' KB';
+  }catch(error){
+    showError(el('import-error'),'无法读取 JSON 文件：'+error.message);
+    event.target.value='';
+  }
+}
 async function importMCPs(event){
   event.preventDefault();clearError(el('import-error'));
   const payload={format:el('import-format').value,conflict:el('import-conflict').value,content:el('import-content').value};
@@ -443,6 +463,7 @@ document.addEventListener('click',event=>{
   if(menu?.hasAttribute('open')&&!menu.contains(event.target))menu.removeAttribute('open');
 });
 el('import-form').addEventListener('submit',importMCPs);
+el('import-file').addEventListener('change',loadImportFile);
 el('mcp-search').addEventListener('input',renderMCPs);
 el('mcp-transport').addEventListener('change',updateTransportFields);
 el('mcp-form').addEventListener('submit',saveMCP);

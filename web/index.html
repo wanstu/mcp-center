@@ -73,11 +73,15 @@
           <article class="metric"><span>MCP 服务</span><strong id="metric-mcps">0</strong><small id="metric-mcps-sub">尚未加载</small></article>
           <article class="metric"><span>已连接服务</span><strong id="metric-online">0</strong><small>当前复用 Session</small></article>
           <article class="metric"><span>已发现工具</span><strong id="metric-tools">0</strong><small>来自已探测服务</small></article>
-          <article class="metric"><span>授权方式</span><strong>4</strong><small>OAuth / Bearer / Header / Query</small></article>
+          <article class="metric"><span>24h 调用</span><strong id="metric-calls-24h">0</strong><small id="metric-errors-24h">错误 0</small></article>
         </div>
         <div class="panel">
           <div class="panel-head"><div><h2>服务概览</h2><p>快速查看当前 MCP 配置。</p></div><button class="button ghost small" data-page-link="mcps">查看全部</button></div>
           <div id="dashboard-list" class="empty">暂无 MCP 服务</div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div><h2>最近错误</h2><p>近 24 小时最近 5 条 MCP 调用错误。</p></div><button class="button ghost small" data-page-link="logs">查看调用日志</button></div>
+          <div id="dashboard-errors" class="empty">近 24 小时无错误</div>
         </div>
       </section>
 

@@ -66,6 +66,37 @@ func TestAuditAPIRequiresAdminAndDoesNotExposeArgumentValues(t *testing.T) {
 	}
 }
 
+func TestAuditSummaryAPI(t *testing.T) {
+	app := newTestApp(t)
+	handler := app.Handler()
+	session := bootstrapSession(t, app)
+	now := time.Now().UTC()
+
+	for _, event := range []mcpcenter.AuditEvent{
+		{RequestID: "ok", MCPID: "m1", ToolName: "read", StartedAt: now.Add(-time.Hour), Status: "success"},
+		{RequestID: "err", MCPID: "m2", ToolName: "call", StartedAt: now.Add(-30 * time.Minute), Status: "error", ErrorKind: "timeout"},
+		{RequestID: "old", MCPID: "m3", ToolName: "old", StartedAt: now.Add(-25 * time.Hour), Status: "error", ErrorKind: "old"},
+	} {
+		if err := app.audit.Record(context.Background(), event); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rec := requestJSON(t, handler, http.MethodGet, "/api/audit/summary", nil, session)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("summary = %d %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, expected := range []string{"\"total\":2", "\"success\":1", "\"errors\":1", "\"request_id\":\"err\""} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("summary missing %q: %s", expected, body)
+		}
+	}
+	if strings.Contains(body, "\"request_id\":\"old\"") {
+		t.Fatalf("summary included event outside 24h: %s", body)
+	}
+}
+
 func TestRequestIDPrefersValidIncomingHeader(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/mcp/test", nil)
 	req.Header.Set("X-Request-ID", "external-request-123")

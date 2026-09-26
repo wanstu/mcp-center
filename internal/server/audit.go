@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	mcpcenter "github.com/wanstu/mcp-center-core"
 )
@@ -24,6 +25,15 @@ func (a *App) handleAuditList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"events": items})
+}
+
+func (a *App) handleAuditSummary(w http.ResponseWriter, _ *http.Request) {
+	summary, err := a.audit.SummarySince(time.Now().UTC().Add(-24*time.Hour), 5)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
 }
 
 func (a *App) handleAuditClear(w http.ResponseWriter, _ *http.Request) {

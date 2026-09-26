@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	mcpcenter "github.com/wanstu/mcp-center-core"
 )
@@ -85,6 +86,66 @@ func (s *Store) List(limit int) ([]mcpcenter.AuditEvent, error) {
 		items[i], items[j] = items[j], items[i]
 	}
 	return items, nil
+}
+
+type Summary struct {
+	Since        time.Time              `json:"since"`
+	Total        int                    `json:"total"`
+	Success      int                    `json:"success"`
+	Errors       int                    `json:"errors"`
+	RecentErrors []mcpcenter.AuditEvent `json:"recent_errors"`
+}
+
+func (s *Store) SummarySince(since time.Time, recentErrorLimit int) (Summary, error) {
+	if recentErrorLimit <= 0 {
+		recentErrorLimit = 5
+	}
+	if recentErrorLimit > 50 {
+		recentErrorLimit = 50
+	}
+	summary := Summary{Since: since.UTC(), RecentErrors: []mcpcenter.AuditEvent{}}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	file, err := os.Open(s.path)
+	if errors.Is(err, os.ErrNotExist) {
+		return summary, nil
+	}
+	if err != nil {
+		return Summary{}, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), 2*1024*1024)
+	for scanner.Scan() {
+		var event mcpcenter.AuditEvent
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			continue
+		}
+		if event.StartedAt.Before(summary.Since) {
+			continue
+		}
+		summary.Total++
+		if event.Status == "error" {
+			summary.Errors++
+			if len(summary.RecentErrors) == recentErrorLimit {
+				copy(summary.RecentErrors, summary.RecentErrors[1:])
+				summary.RecentErrors[len(summary.RecentErrors)-1] = event
+			} else {
+				summary.RecentErrors = append(summary.RecentErrors, event)
+			}
+		} else {
+			summary.Success++
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return Summary{}, err
+	}
+	for i, j := 0, len(summary.RecentErrors)-1; i < j; i, j = i+1, j-1 {
+		summary.RecentErrors[i], summary.RecentErrors[j] = summary.RecentErrors[j], summary.RecentErrors[i]
+	}
+	return summary, nil
 }
 
 func (s *Store) Clear() error {

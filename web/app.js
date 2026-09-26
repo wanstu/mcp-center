@@ -1,5 +1,5 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,editingMCP:null,accessSettings:null,credentials:[],oauthClients:[],upstreamSecrets:[],audits:[],page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,editingMCP:null,accessSettings:null,credentials:[],oauthClients:[],upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
 const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
@@ -48,6 +48,10 @@ async function mockApi(path,options){
   if(path==='/api/access/settings'&&method==='GET')return {settings:mockData.accessSettings};
   if(path==='/api/access/settings'&&method==='PUT'){mockData.accessSettings=JSON.parse(options.body);return {settings:mockData.accessSettings}}
   if(path==='/api/access/credentials'&&method==='GET')return {credentials:mockData.credentials};
+  if(path==='/api/audit/summary'&&method==='GET'){
+    const since=Date.now()-24*60*60*1000,events=mockData.audits.filter(x=>new Date(x.started_at).getTime()>=since),errors=events.filter(x=>x.status==='error');
+    return {since:new Date(since).toISOString(),total:events.length,success:events.length-errors.length,errors:errors.length,recent_errors:errors.slice(-5).reverse()};
+  }
   if(path.startsWith('/api/audit')&&method==='GET')return {events:mockData.audits};
   if(path==='/api/audit'&&method==='DELETE'){mockData.audits=[];return {ok:true}}
   if(path==='/api/access/credentials'&&method==='POST'){const input=JSON.parse(options.body),secret='mcp_mock_'+Date.now(),item={id:'cred_'+Date.now(),secret_prefix:secret.slice(0,12),created_at:new Date().toISOString(),updated_at:new Date().toISOString(),last_used_at:null,...input};mockData.credentials.push(item);return {credential:item,secret}}
@@ -103,7 +107,7 @@ async function enterApp(){
   el('auth-screen').classList.add('hidden');el('app').classList.remove('hidden');
   el('me-name').textContent=state.user?.username||'admin';
   renderAccountSettings();
-  await Promise.allSettled([loadMCPs(),loadOAuth(),loadAccess(),loadVersion(),loadUpstreamSecrets()]);
+  await Promise.allSettled([loadMCPs(),loadOAuth(),loadAccess(),loadVersion(),loadUpstreamSecrets(),loadAuditSummary()]);
 }
 async function submitAuth(event){
   event.preventDefault();clearError(el('auth-error'));
@@ -123,7 +127,13 @@ function switchPage(page){
   if(page==='tools')refreshToolMCPSelect();
   if(page==='access')Promise.all([loadAccess(),loadOAuth()]).catch(error=>toast(error.message));
   if(page==='logs')loadAudit().catch(error=>toast(error.message));
+  if(page==='dashboard')loadAuditSummary().catch(error=>toast(error.message));
   if(page==='settings'){renderAccountSettings();Promise.all([loadVersion(),loadUpstreamSecrets()]).catch(error=>toast(error.message))}
+}
+async function loadAuditSummary(){
+  const result=await api('/api/audit/summary');
+  state.auditSummary=result||{total:0,success:0,errors:0,recent_errors:[]};
+  renderDashboard();
 }
 async function loadMCPs(){
   const [result,runtimeResult]=await Promise.all([api('/api/mcps'),api('/api/runtime')]);
@@ -163,12 +173,44 @@ function renderDashboard(){
   el('metric-mcps').textContent=state.mcps.length;
   const online=state.mcps.filter(m=>state.runtime.get(m.id)?.state==='connected'||state.health.get(m.id)?.state==='healthy').length;
   el('metric-online').textContent=online;
-  let tools=0;for(const m of state.mcps)tools+=state.tools.get(m.id)?.length??state.health.get(m.id)?.tools?.length??state.runtime.get(m.id)?.tool_count??0;
-  el('metric-tools').textContent=tools;el('metric-mcps-sub').textContent=state.mcps.length?'已加载配置':'尚未添加';
+  let tools=0;
+  for(const m of state.mcps)tools+=state.tools.get(m.id)?.length??state.health.get(m.id)?.tools?.length??state.runtime.get(m.id)?.tool_count??0;
+  el('metric-tools').textContent=tools;
+  el('metric-mcps-sub').textContent=state.mcps.length?'已加载配置':'尚未添加';
+
+  const summary=state.auditSummary||{total:0,errors:0,recent_errors:[]};
+  el('metric-calls-24h').textContent=summary.total||0;
+  el('metric-errors-24h').textContent='错误 '+(summary.errors||0);
+
   const box=el('dashboard-list');box.innerHTML='';
-  if(!state.mcps.length){box.className='empty';box.textContent='暂无 MCP 服务';return}
-  box.className='service-list';
-  for(const m of state.mcps.slice(0,6)){const row=document.createElement('div');row.className='service-item';const h=state.health.get(m.id),runtime=state.runtime.get(m.id);let status='<span class="status">未连接</span>';if(runtime?.state==='connected'||h?.state==='healthy')status='<span class="status ok">已连接</span>';else if(runtime?.state==='error'||h?.state==='error')status='<span class="status bad">异常</span>';row.innerHTML='<div><strong>'+escapeHTML(m.name)+'</strong><small>'+escapeHTML(m.transport)+' · '+escapeHTML(m.endpoint||m.executable||'')+'</small></div>'+status;box.appendChild(row)}
+  if(!state.mcps.length){
+    box.className='empty';box.textContent='暂无 MCP 服务';
+  }else{
+    box.className='service-list';
+    for(const m of state.mcps.slice(0,6)){
+      const row=document.createElement('div');row.className='service-item';
+      const h=state.health.get(m.id),runtime=state.runtime.get(m.id);
+      let status='<span class="status">未连接</span>';
+      if(runtime?.state==='connected'||h?.state==='healthy')status='<span class="status ok">已连接</span>';
+      else if(runtime?.state==='error'||h?.state==='error')status='<span class="status bad">异常</span>';
+      row.innerHTML='<div><strong>'+escapeHTML(m.name)+'</strong><small>'+escapeHTML(m.transport)+' · '+escapeHTML(m.endpoint||m.executable||'')+'</small></div>'+status;
+      box.appendChild(row);
+    }
+  }
+
+  const errorsBox=el('dashboard-errors');errorsBox.innerHTML='';
+  const errors=summary.recent_errors||[];
+  if(!errors.length){
+    errorsBox.className='empty';errorsBox.textContent='近 24 小时无错误';
+  }else{
+    errorsBox.className='service-list';
+    for(const item of errors){
+      const row=document.createElement('div');row.className='service-item';
+      const when=item.started_at?new Date(item.started_at).toLocaleString():'—';
+      row.innerHTML='<div><strong>'+escapeHTML((item.mcp_id||'未知 MCP')+' / '+(item.tool_name||'未知工具'))+'</strong><small>'+escapeHTML(when)+' · '+escapeHTML(item.request_id||'')+'</small></div><span class="status bad">'+escapeHTML(item.error_kind||'error')+'</span>';
+      errorsBox.appendChild(row);
+    }
+  }
 }
 async function probeMCP(id){
   try{toast('正在刷新…');const result=await api('/api/mcps/'+encodeURIComponent(id)+'/probe',{method:'POST'});state.health.set(id,result);if(result.tools)state.tools.set(id,result.tools);await loadRuntimeStatuses();toast(result.state==='healthy'?'刷新成功':'刷新完成：'+result.state)}
@@ -347,7 +389,7 @@ async function callTool(){
   el('tool-result').textContent='调用中…';el('tool-call').disabled=true;
   try{const result=await api('/api/mcps/'+encodeURIComponent(mcpID)+'/call',{method:'POST',body:JSON.stringify({name:state.selectedTool.name,arguments:args})});el('tool-result').textContent=json(result)}
   catch(error){el('tool-result').textContent='ERROR: '+error.message}
-  finally{el('tool-call').disabled=false}
+  finally{el('tool-call').disabled=false;loadAuditSummary().catch(()=>{})}
 }
 async function loadOAuth(){
   try{
@@ -563,7 +605,7 @@ function renderAudit(){
 }
 async function clearAudit(){
   if(!confirm('清空全部调用日志？此操作不可恢复。'))return;
-  try{await api('/api/audit',{method:'DELETE'});state.audits=[];renderAudit();toast('调用日志已清空')}catch(error){toast(error.message)}
+  try{await api('/api/audit',{method:'DELETE'});state.audits=[];state.auditSummary={total:0,success:0,errors:0,recent_errors:[]};renderAudit();renderDashboard();toast('调用日志已清空')}catch(error){toast(error.message)}
 }
 function escapeHTML(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
@@ -579,7 +621,7 @@ document.addEventListener('click',event=>{
 });
 el('auth-form').addEventListener('submit',submitAuth);
 el('logout').onclick=async()=>{try{await api('/api/auth/logout',{method:'POST'})}finally{state.user=null;showAuth(false)}};
-el('refresh').onclick=async()=>{try{await loadMCPs();toast('已刷新')}catch(error){toast(error.message)}};
+el('refresh').onclick=async()=>{try{await Promise.all([loadMCPs(),loadAuditSummary()]);toast('已刷新')}catch(error){toast(error.message)}};
 el('probe-all').onclick=probeAll;
 el('open-import').onclick=openImportDialog;
 document.querySelectorAll('[data-export-format]').forEach(button=>button.addEventListener('click',()=>{

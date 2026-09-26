@@ -104,6 +104,12 @@
         <div class="panel">
           <div class="toolbar">
             <input id="mcp-search" class="search" placeholder="搜索名称、Endpoint 或 Transport">
+            <select id="mcp-status-filter" class="filter-select">
+              <option value="all">全部状态</option>
+              <option value="connected">已连接</option>
+              <option value="disconnected">未连接</option>
+              <option value="error">异常</option>
+            </select>
           </div>
           <div id="mcp-table-wrap" class="table-wrap">
             <table>

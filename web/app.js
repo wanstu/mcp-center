@@ -146,15 +146,26 @@ async function loadRuntimeStatuses(){
   state.runtime=new Map((result.runtime||[]).map(item=>[item.mcp_id,item]));
   renderMCPs();renderDashboard();
 }
+function mcpStatusKey(m){
+  const health=state.health.get(m.id),runtime=state.runtime.get(m.id);
+  if(runtime?.state==='connected'||health?.state==='healthy')return 'connected';
+  if(runtime?.state==='error'||health?.state==='error')return 'error';
+  return 'disconnected';
+}
 function renderMCPs(){
   const q=el('mcp-search').value.trim().toLowerCase();
-  const items=state.mcps.filter(m=>!q||[m.name,m.endpoint,m.executable,m.transport].some(v=>String(v||'').toLowerCase().includes(q)));
+  const statusFilter=el('mcp-status-filter')?.value||'all';
+  const items=state.mcps.filter(m=>{
+    const matchesSearch=!q||[m.name,m.endpoint,m.executable,m.transport].some(v=>String(v||'').toLowerCase().includes(q));
+    const matchesStatus=statusFilter==='all'||mcpStatusKey(m)===statusFilter;
+    return matchesSearch&&matchesStatus;
+  });
   const body=el('mcp-rows');body.innerHTML='';
   for(const m of items){
-    const health=state.health.get(m.id),runtime=state.runtime.get(m.id);
+    const health=state.health.get(m.id),runtime=state.runtime.get(m.id),statusKey=mcpStatusKey(m);
     let status='<span class="status">未连接</span>';
-    if(runtime?.state==='connected'||health?.state==='healthy')status='<span class="status ok">已连接</span>';
-    else if(runtime?.state==='error'||health?.state==='error')status='<span class="status bad">异常</span>';
+    if(statusKey==='connected')status='<span class="status ok">已连接</span>';
+    else if(statusKey==='error')status='<span class="status bad">异常</span>';
     const tools=state.tools.get(m.id)?.length??health?.tools?.length??runtime?.tool_count??'—';
     const where=m.transport==='stdio'?escapeHTML([m.executable,...(m.args||[])].join(' ')):escapeHTML(m.endpoint||'');
     const disconnect=runtime?.state==='connected'?'<button class="button ghost small" data-op="disconnect">断开</button> ':'';
@@ -167,7 +178,10 @@ function renderMCPs(){
     tr.querySelector('[data-op="delete"]').onclick=()=>deleteMCP(m);
     body.appendChild(tr);
   }
-  el('mcp-table-wrap').classList.toggle('hidden',items.length===0);el('mcp-empty').classList.toggle('hidden',items.length!==0);
+  el('mcp-table-wrap').classList.toggle('hidden',items.length===0);
+  const empty=el('mcp-empty');
+  empty.classList.toggle('hidden',items.length!==0);
+  if(items.length===0)empty.textContent=state.mcps.length?'没有符合筛选条件的 MCP。':'还没有 MCP，先添加一个。';
 }
 function renderDashboard(){
   el('metric-mcps').textContent=state.mcps.length;
@@ -636,6 +650,7 @@ document.addEventListener('click',event=>{
 el('import-form').addEventListener('submit',importMCPs);
 el('import-file').addEventListener('change',loadImportFile);
 el('mcp-search').addEventListener('input',renderMCPs);
+el('mcp-status-filter').addEventListener('change',renderMCPs);
 el('mcp-transport').addEventListener('change',updateTransportFields);
 el('mcp-auth').addEventListener('change',updateAuthFields);
 el('mcp-form').addEventListener('submit',saveMCP);

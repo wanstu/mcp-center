@@ -171,7 +171,7 @@ Phase 1 最小支持：
 /.well-known/oauth-protected-resource
 ```
 
-OAuth Client 首版由管理员创建：
+OAuth Client 首版由管理员显式创建，**不开放 Dynamic Client Registration**：
 
 - client_id
 - name
@@ -180,6 +180,8 @@ OAuth Client 首版由管理员创建：
 - enabled
 
 Public Client 默认不发 client_secret，依赖 PKCE。
+
+`/oauth/revoke` 支持客户端主动撤销 Access Token 或 Refresh Token；撤销任意一个都会使同一 Grant 的 Access / Refresh Token 一并失效。未知 Token 按幂等成功处理，但 Client 不能撤销其他 Client 的 Token。
 
 ## 8. 授权顺序
 

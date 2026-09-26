@@ -1,5 +1,5 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,accessSettings:null,credentials:[],audits:[],page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,accessSettings:null,credentials:[],oauthClients:[],audits:[],page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
 const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
@@ -11,7 +11,7 @@ function clearError(node){node.textContent='';node.classList.add('hidden')}
 const mockData={mcps:[
 {id:'mcp_demo_adm',name:'pj-adm',transport:'streamable-http',auth_mode:'none',endpoint:'http://127.0.0.1:8001/mcp',default_include_in_environment:true},
 {id:'mcp_demo_db',name:'wm-test-db',transport:'stdio',auth_mode:'none',executable:'mysql-mcp',args:['--readonly'],default_include_in_environment:false}
-],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},credentials:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
+],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},credentials:[],oauthClients:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
 
 async function api(path,options={}){
   if(state.mock)return mockApi(path,options);
@@ -29,6 +29,10 @@ async function mockApi(path,options){
   if(path==='/api/auth/login')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/auth/logout')return {ok:true};
   if(path==='/api/account/password'&&method==='POST')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
+  if(path==='/api/oauth/clients'&&method==='GET')return {clients:mockData.oauthClients};
+  if(path==='/api/oauth/clients'&&method==='POST'){const input=JSON.parse(options.body),item={client_id:'client_'+Date.now(),created_at:new Date().toISOString(),grant_types:input.grant_types||['authorization_code','refresh_token'],response_types:input.response_types||['code'],...input};mockData.oauthClients.push(item);return {client:item}}
+  const oauthClient=path.match(/^\/api\/oauth\/clients\/([^/]+)$/);
+  if(oauthClient){const id=oauthClient[1];if(method==='DELETE'){mockData.oauthClients=mockData.oauthClients.filter(x=>x.client_id!==id);return {ok:true}}if(method==='PUT'){const input=JSON.parse(options.body),i=mockData.oauthClients.findIndex(x=>x.client_id===id);if(i<0)throw new Error('OAuth Client 不存在');mockData.oauthClients[i]={...mockData.oauthClients[i],...input};return {client:mockData.oauthClients[i]}}}
   if(path==='/api/access/settings'&&method==='GET')return {settings:mockData.accessSettings};
   if(path==='/api/access/settings'&&method==='PUT'){mockData.accessSettings=JSON.parse(options.body);return {settings:mockData.accessSettings}}
   if(path==='/api/access/credentials'&&method==='GET')return {credentials:mockData.credentials};
@@ -59,7 +63,7 @@ async function mockApi(path,options){
     if(action==='tools'){const tools=mockData.tools[id]||[];mockData.runtime[id]={mcp_id:id,state:'connected',tool_count:tools.length,connected_at:new Date().toISOString(),last_used_at:new Date().toISOString()};return {tools}}
     if(action==='call'){const current=mockData.runtime[id]||{mcp_id:id,state:'connected',tool_count:(mockData.tools[id]||[]).length,connected_at:new Date().toISOString()};mockData.runtime[id]={...current,state:'connected',last_used_at:new Date().toISOString()};return {content:[{type:'text',text:'mock result'}],structuredContent:{ok:true,arguments:JSON.parse(options.body).arguments||{}}}};
   }
-  if(path==='/.well-known/oauth-authorization-server')return {issuer:location.origin,authorization_endpoint:location.origin+'/oauth/authorize',token_endpoint:location.origin+'/oauth/token',registration_endpoint:location.origin+'/oauth/register',code_challenge_methods_supported:['S256']};
+  if(path==='/.well-known/oauth-authorization-server')return {issuer:location.origin,authorization_endpoint:location.origin+'/oauth/authorize',token_endpoint:location.origin+'/oauth/token',code_challenge_methods_supported:['S256']};
   throw new Error('Mock endpoint not implemented: '+method+' '+path);
 }
 
@@ -87,7 +91,7 @@ async function enterApp(){
   el('auth-screen').classList.add('hidden');el('app').classList.remove('hidden');
   el('me-name').textContent=state.user?.username||'admin';
   renderAccountSettings();
-  await Promise.allSettled([loadMCPs(),loadOAuthMetadata(),loadAccess()]);
+  await Promise.allSettled([loadMCPs(),loadOAuth(),loadAccess()]);
 }
 async function submitAuth(event){
   event.preventDefault();clearError(el('auth-error'));
@@ -105,7 +109,7 @@ function switchPage(page){
   document.querySelectorAll('.nav button[data-page]').forEach(n=>n.classList.toggle('active',n.dataset.page===page));
   el('page-'+page).classList.add('active');el('page-title').textContent=pageNames[page]||page;
   if(page==='tools')refreshToolMCPSelect();
-  if(page==='access')loadAccess().catch(error=>toast(error.message));
+  if(page==='access')Promise.all([loadAccess(),loadOAuth()]).catch(error=>toast(error.message));
   if(page==='logs')loadAudit().catch(error=>toast(error.message));
   if(page==='settings')renderAccountSettings();
 }
@@ -245,9 +249,57 @@ async function callTool(){
   catch(error){el('tool-result').textContent='ERROR: '+error.message}
   finally{el('tool-call').disabled=false}
 }
-async function loadOAuthMetadata(){
-  try{const meta=await api('/.well-known/oauth-authorization-server');const box=el('oauth-meta');box.innerHTML='';for(const key of ['issuer','authorization_endpoint','token_endpoint','registration_endpoint']){const line=document.createElement('div');line.innerHTML='<strong>'+escapeHTML(key)+'</strong><div class="muted">'+escapeHTML(meta[key]||'—')+'</div>';box.appendChild(line)}}
-  catch(error){el('oauth-meta').innerHTML='<span class="form-error">'+escapeHTML(error.message)+'</span>'}
+async function loadOAuth(){
+  try{
+    const [meta,clientsResult]=await Promise.all([api('/.well-known/oauth-authorization-server'),api('/api/oauth/clients')]);
+    const box=el('oauth-meta');box.innerHTML='';
+    for(const key of ['issuer','authorization_endpoint','token_endpoint']){
+      const line=document.createElement('div');
+      line.innerHTML='<strong>'+escapeHTML(key)+'</strong><div class="muted">'+escapeHTML(meta[key]||'—')+'</div>';
+      box.appendChild(line);
+    }
+    state.oauthClients=clientsResult.clients||[];
+    renderOAuthClients();
+  }catch(error){
+    el('oauth-meta').innerHTML='<span class="form-error">'+escapeHTML(error.message)+'</span>';
+    state.oauthClients=[];renderOAuthClients();
+  }
+}
+function renderOAuthClients(){
+  const body=el('oauth-client-rows');body.innerHTML='';
+  for(const item of state.oauthClients){
+    const redirects=(item.redirect_uris||[]).join('\n');
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td><strong>'+escapeHTML(item.client_name||'未命名')+'</strong></td><td><span class="muted">'+escapeHTML(item.client_id||'')+'</span></td><td><span class="muted">'+escapeHTML(redirects||'—').replace(/\n/g,'<br>')+'</span></td><td>'+escapeHTML(item.created_at?new Date(item.created_at).toLocaleString():'—')+'</td><td><div class="row"><button class="button ghost small" data-edit>编辑</button><button class="button ghost small" data-delete>删除</button></div></td>';
+    tr.querySelector('[data-edit]').onclick=()=>openOAuthClientDialog(item);
+    tr.querySelector('[data-delete]').onclick=()=>deleteOAuthClient(item);
+    body.appendChild(tr);
+  }
+  const empty=state.oauthClients.length===0;
+  el('oauth-client-table-wrap').classList.toggle('hidden',empty);
+  el('oauth-client-empty').classList.toggle('hidden',!empty);
+}
+function openOAuthClientDialog(item=null){
+  el('oauth-client-dialog-title').textContent=item?'编辑 OAuth Client':'创建 OAuth Client';
+  el('oauth-client-id').value=item?.client_id||'';
+  el('oauth-client-name').value=item?.client_name||'';
+  el('oauth-client-redirects').value=(item?.redirect_uris||[]).join('\n');
+  clearError(el('oauth-client-error'));
+  el('oauth-client-dialog').showModal();
+}
+async function saveOAuthClient(event){
+  event.preventDefault();clearError(el('oauth-client-error'));
+  const id=el('oauth-client-id').value.trim();
+  const redirects=el('oauth-client-redirects').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  const payload={client_name:el('oauth-client-name').value.trim(),redirect_uris:redirects,grant_types:['authorization_code','refresh_token'],response_types:['code']};
+  try{
+    await api(id?'/api/oauth/clients/'+encodeURIComponent(id):'/api/oauth/clients',{method:id?'PUT':'POST',body:JSON.stringify(payload)});
+    el('oauth-client-dialog').close();await loadOAuth();toast(id?'OAuth Client 已更新，旧授权已撤销':'OAuth Client 已创建');
+  }catch(error){showError(el('oauth-client-error'),error)}
+}
+async function deleteOAuthClient(item){
+  if(!confirm('删除 OAuth Client “'+(item.client_name||item.client_id)+'”？已有授权码和 Token 会同时失效。'))return;
+  try{await api('/api/oauth/clients/'+encodeURIComponent(item.client_id),{method:'DELETE'});await loadOAuth();toast('OAuth Client 已删除，旧授权已撤销')}catch(error){toast(error.message)}
 }
 function renderAccountSettings(){
   const input=el('settings-username');
@@ -366,6 +418,7 @@ document.addEventListener('click',event=>{
   if(event.target.closest('[data-action="close-dialog"]'))el('mcp-dialog').close();
   if(event.target.closest('[data-action="close-credential-dialog"]'))el('credential-dialog').close();
   if(event.target.closest('[data-action="close-import-dialog"]'))el('import-dialog').close();
+  if(event.target.closest('[data-action="close-oauth-client-dialog"]'))el('oauth-client-dialog').close();
 });
 el('auth-form').addEventListener('submit',submitAuth);
 el('logout').onclick=async()=>{try{await api('/api/auth/logout',{method:'POST'})}finally{state.user=null;showAuth(false)}};
@@ -380,6 +433,8 @@ el('mcp-form').addEventListener('submit',saveMCP);
 el('tool-mcp').addEventListener('change',event=>loadTools(event.target.value));
 el('tool-call').onclick=callTool;
 el('add-credential').onclick=()=>openCredentialDialog();
+el('add-oauth-client').onclick=()=>openOAuthClientDialog();
+el('oauth-client-form').addEventListener('submit',saveOAuthClient);
 el('save-access-settings').onclick=saveAccessSettings;
 el('credential-form').addEventListener('submit',saveCredential);
 el('close-secret').onclick=()=>el('secret-dialog').close();

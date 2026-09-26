@@ -150,7 +150,25 @@
           </div>
           <div id="credential-empty" class="empty hidden">还没有 Access Credential。</div>
         </div>
-        <article class="panel"><h2>OAuth</h2><p class="muted">Authorization Code + PKCE S256，Access Token 绑定具体 MCP Resource。</p><div id="oauth-meta" class="stack mini"><span class="muted">读取 OAuth Metadata…</span></div></article>
+        <article class="panel">
+          <div class="panel-head"><div><h2>OAuth Clients</h2><p>Authorization Code + PKCE S256。Client 只允许管理员显式创建，不开放动态注册。</p></div><button id="add-oauth-client" class="button">创建 OAuth Client</button></div>
+          <div class="grid-2">
+            <div>
+              <h2>Authorization Server</h2>
+              <div id="oauth-meta" class="stack mini"><span class="muted">读取 OAuth Metadata…</span></div>
+            </div>
+            <div>
+              <h2>已注册 Client</h2>
+              <div id="oauth-client-table-wrap" class="table-wrap">
+                <table>
+                  <thead><tr><th>名称</th><th>Client ID</th><th>Redirect URI</th><th>创建时间</th><th>操作</th></tr></thead>
+                  <tbody id="oauth-client-rows"></tbody>
+                </table>
+              </div>
+              <div id="oauth-client-empty" class="empty hidden">还没有 OAuth Client。</div>
+            </div>
+          </div>
+        </article>
       </section>
 
       <section id="page-logs" class="page">
@@ -192,6 +210,20 @@
       </section>
     </main>
   </div>
+
+  <dialog id="oauth-client-dialog" class="dialog">
+    <form id="oauth-client-form" method="dialog">
+      <div class="dialog-head"><div><h2 id="oauth-client-dialog-title">创建 OAuth Client</h2><p>首版使用 Public Client + PKCE，不生成 client_secret。</p></div><button type="button" class="icon-button" data-action="close-oauth-client-dialog">×</button></div>
+      <input id="oauth-client-id" type="hidden">
+      <div class="form-grid">
+        <label class="field span-2">Client Name<input id="oauth-client-name" maxlength="120" placeholder="例如 ChatGPT MCP"></label>
+        <label class="field span-2">Redirect URI（每行一个）<textarea id="oauth-client-redirects" rows="6" spellcheck="false" placeholder="https://client.example.com/oauth/callback"></textarea></label>
+      </div>
+      <div class="notice">Redirect URI 必须精确匹配。公网地址要求 HTTPS；localhost / 127.0.0.1 等 loopback 地址允许 HTTP。</div>
+      <p id="oauth-client-error" class="form-error hidden"></p>
+      <div class="dialog-actions"><button type="button" class="button" data-action="close-oauth-client-dialog">取消</button><button type="submit" class="button primary">保存</button></div>
+    </form>
+  </dialog>
 
   <dialog id="import-dialog" class="dialog">
     <form id="import-form" method="dialog">

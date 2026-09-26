@@ -70,11 +70,12 @@ func (a *App) handleAuthorizationServerMetadata(w http.ResponseWriter, _ *http.R
 		"issuer":                                         a.baseURL,
 		"authorization_endpoint":                         a.baseURL + "/oauth/authorize",
 		"token_endpoint":                                 a.baseURL + "/oauth/token",
-		"registration_endpoint":                          a.baseURL + "/oauth/register",
+		"revocation_endpoint":                            a.baseURL + "/oauth/revoke",
 		"response_types_supported":                       []string{"code"},
 		"grant_types_supported":                          []string{"authorization_code", "refresh_token"},
 		"code_challenge_methods_supported":               []string{"S256"},
 		"token_endpoint_auth_methods_supported":          []string{"none"},
+		"revocation_endpoint_auth_methods_supported":     []string{"none"},
 		"scopes_supported":                               []string{"mcp:*"},
 		"authorization_response_iss_parameter_supported": true,
 	})
@@ -91,28 +92,6 @@ func (a *App) handleProtectedResourceMetadata(w http.ResponseWriter, r *http.Req
 		"authorization_servers":    []string{a.baseURL},
 		"scopes_supported":         []string{"mcp:*"},
 		"bearer_methods_supported": []string{"header"},
-	})
-}
-
-func (a *App) handleOAuthRegister(w http.ResponseWriter, r *http.Request) {
-	var metadata oauthcore.ClientMetadata
-	if err := decodeJSON(r, &metadata); err != nil {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", err.Error())
-		return
-	}
-	client, err := a.oauth.RegisterClient(metadata)
-	if err != nil {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", err.Error())
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"client_id":                  client.ID,
-		"client_id_issued_at":        client.CreatedAt.Unix(),
-		"client_name":                client.ClientName,
-		"redirect_uris":              client.RedirectURIs,
-		"grant_types":                client.GrantTypes,
-		"response_types":             client.ResponseTypes,
-		"token_endpoint_auth_method": "none",
 	})
 }
 
@@ -237,6 +216,26 @@ func (a *App) handleOAuthToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, set)
+}
+
+func (a *App) handleOAuthRevoke(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "invalid form")
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
+	clientID := strings.TrimSpace(r.PostForm.Get("client_id"))
+	token := strings.TrimSpace(r.PostForm.Get("token"))
+	if clientID == "" || token == "" {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "client_id and token are required")
+		return
+	}
+	if err := a.oauth.RevokeToken(clientID, token); err != nil {
+		writeOAuthError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusOK)
 }
 
 func (a *App) authorizeViewFromValues(values url.Values) (authorizeView, error) {

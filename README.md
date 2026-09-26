@@ -34,10 +34,12 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - Runtime Session Manager：复用上游 Session、tools/list 缓存、刷新/断开、运行时状态
 - 配置更新 / 删除 / 导入后自动失效旧 Session
 - 管理员账号设置与修改密码；改密后旧 Session 全部失效并自动换发当前 Session
+- OAuth Client 管理：管理员显式创建 / 编辑 / 删除，Public Client + PKCE
+- OAuth Client 修改 / 删除会撤销已有授权码与 Token；不开放动态客户端注册
+- OAuth Token 主动撤销：`/oauth/revoke`，Access / Refresh Grant 一并失效
 
 开发中：
 
-- OAuth Client 管理
 - 更完整设置页面
 
 ## 本地启动

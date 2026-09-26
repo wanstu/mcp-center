@@ -87,8 +87,13 @@
           <div class="row">
             <button id="probe-all" class="button">刷新全部</button>
             <button id="open-import" class="button">导入</button>
-            <select id="export-format" class="button"><option value="mcp-center">MCP Center 格式</option><option value="mcpServers">通用 mcpServers</option></select>
-            <button id="export-mcps" class="button">导出</button>
+            <details id="export-menu" class="export-menu">
+              <summary class="button">导出 <span class="menu-caret">▾</span></summary>
+              <div class="export-menu-popover">
+                <button type="button" data-export-format="mcp-center"><strong>导出为 MCP Center</strong><span>保留 MCP Center 完整配置</span></button>
+                <button type="button" data-export-format="mcpServers"><strong>导出为 mcpServers</strong><span>兼容常见 MCP 客户端配置</span></button>
+              </div>
+            </details>
             <button class="button primary" data-action="open-add">添加 MCP</button>
           </div>
         </div>

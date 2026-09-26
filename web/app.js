@@ -199,8 +199,7 @@ async function importMCPs(event){
     toast('导入完成：新增 '+result.added+'，更新 '+result.updated+'，跳过 '+result.skipped);
   }catch(error){showError(el('import-error'),error)}
 }
-async function exportMCPs(){
-  const format=el('export-format').value;
+async function exportMCPs(format){
   if(state.mock){
     let doc;
     if(format==='mcpServers'){
@@ -434,7 +433,15 @@ el('logout').onclick=async()=>{try{await api('/api/auth/logout',{method:'POST'})
 el('refresh').onclick=async()=>{try{await loadMCPs();toast('已刷新')}catch(error){toast(error.message)}};
 el('probe-all').onclick=probeAll;
 el('open-import').onclick=openImportDialog;
-el('export-mcps').onclick=exportMCPs;
+document.querySelectorAll('[data-export-format]').forEach(button=>button.addEventListener('click',()=>{
+  const format=button.dataset.exportFormat;
+  el('export-menu').removeAttribute('open');
+  exportMCPs(format);
+}));
+document.addEventListener('click',event=>{
+  const menu=el('export-menu');
+  if(menu?.hasAttribute('open')&&!menu.contains(event.target))menu.removeAttribute('open');
+});
 el('import-form').addEventListener('submit',importMCPs);
 el('mcp-search').addEventListener('input',renderMCPs);
 el('mcp-transport').addEventListener('change',updateTransportFields);

@@ -63,6 +63,14 @@ go run ./cmd/mcp-center --version
 
 正式构建可通过 `-ldflags` 注入版本号；未注入时显示 `dev + Git commit`。
 
+RC / Release 构建：
+
+```powershell
+./scripts/build-release.ps1 -Version v0.1.0-rc.1
+```
+
+详见 `docs/RELEASE.md`。
+
 默认数据目录使用系统用户配置目录下的 `mcp-center`。开发时可通过 `--data-dir` 指定其他目录。
 
 ## 项目结构

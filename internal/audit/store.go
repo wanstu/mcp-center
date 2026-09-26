@@ -16,6 +16,9 @@ import (
 type Store struct {
 	path string
 	mu   sync.Mutex
+
+	retentionDays int
+	lastPrune     time.Time
 }
 
 func New(path string) (*Store, error) {
@@ -35,13 +38,22 @@ func (s *Store) Record(_ context.Context, event mcpcenter.AuditEvent) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	file, err := os.OpenFile(s.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
 	if _, err := file.Write(append(data, '\n')); err != nil {
+		_ = file.Close()
 		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	if s.retentionDays > 0 && (s.lastPrune.IsZero() || now.Sub(s.lastPrune) >= time.Hour) {
+		return s.pruneLocked(now.AddDate(0, 0, -s.retentionDays), now)
 	}
 	return nil
 }
@@ -146,6 +158,81 @@ func (s *Store) SummarySince(since time.Time, recentErrorLimit int) (Summary, er
 		summary.RecentErrors[i], summary.RecentErrors[j] = summary.RecentErrors[j], summary.RecentErrors[i]
 	}
 	return summary, nil
+}
+
+func (s *Store) SetRetentionDays(days int) error {
+	if days < 1 || days > 3650 {
+		return errors.New("audit retention days must be between 1 and 3650")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.retentionDays = days
+	now := time.Now().UTC()
+	return s.pruneLocked(now.AddDate(0, 0, -days), now)
+}
+
+func (s *Store) RetentionDays() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.retentionDays
+}
+
+func (s *Store) pruneLocked(cutoff, prunedAt time.Time) error {
+	file, err := os.Open(s.path)
+	if errors.Is(err, os.ErrNotExist) {
+		s.lastPrune = prunedAt
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	tmp := s.path + ".prune.tmp"
+	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if err != nil {
+		_ = file.Close()
+		return err
+	}
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), 2*1024*1024)
+	for scanner.Scan() {
+		line := append([]byte(nil), scanner.Bytes()...)
+		var event mcpcenter.AuditEvent
+		if err := json.Unmarshal(line, &event); err != nil || event.StartedAt.Before(cutoff) {
+			continue
+		}
+		if _, err := out.Write(append(line, '\n')); err != nil {
+			_ = file.Close()
+			_ = out.Close()
+			_ = os.Remove(tmp)
+			return err
+		}
+	}
+	scanErr := scanner.Err()
+	closeInErr := file.Close()
+	closeOutErr := out.Close()
+	if scanErr != nil {
+		_ = os.Remove(tmp)
+		return scanErr
+	}
+	if closeInErr != nil {
+		_ = os.Remove(tmp)
+		return closeInErr
+	}
+	if closeOutErr != nil {
+		_ = os.Remove(tmp)
+		return closeOutErr
+	}
+
+	if err := os.Rename(tmp, s.path); err != nil {
+		_ = os.Remove(s.path)
+		if err2 := os.Rename(tmp, s.path); err2 != nil {
+			_ = os.Remove(tmp)
+			return err2
+		}
+	}
+	s.lastPrune = prunedAt
+	return nil
 }
 
 func (s *Store) Clear() error {

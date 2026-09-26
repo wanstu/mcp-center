@@ -20,6 +20,7 @@ import (
 	account "github.com/wanstu/mcp-center-core/auth"
 	oauthcore "github.com/wanstu/mcp-center-core/oauth"
 	auditstore "github.com/wanstu/mcp-center/internal/audit"
+	settingsstore "github.com/wanstu/mcp-center/internal/settings"
 	upstreamsecret "github.com/wanstu/mcp-center/internal/upstreamsecret"
 )
 
@@ -38,6 +39,7 @@ type App struct {
 	oauth           *oauthcore.Service
 	audit           *auditstore.Store
 	upstreamSecrets *upstreamsecret.Store
+	settings        *settingsstore.Store
 	assets          fs.FS
 	baseURL         string
 	secure          bool
@@ -77,6 +79,17 @@ func New(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	settingsService, err := settingsstore.New(filepath.Join(cfg.DataDir, "settings.json"))
+	if err != nil {
+		return nil, err
+	}
+	settingsValues, err := settingsService.Get()
+	if err != nil {
+		return nil, err
+	}
+	if err := auditLog.SetRetentionDays(settingsValues.AuditRetentionDays); err != nil {
+		return nil, err
+	}
 	upstreamSecrets, err := upstreamsecret.New(
 		filepath.Join(cfg.DataDir, "upstream-secrets.json"),
 		filepath.Join(cfg.DataDir, "upstream-secrets.key"),
@@ -94,8 +107,8 @@ func New(cfg Config) (*App, error) {
 	})
 	return &App{
 		core: coreService, access: accessService, account: accounts, oauth: oauthService, audit: auditLog,
-		upstreamSecrets: upstreamSecrets,
-		assets:          cfg.Assets, baseURL: base, secure: strings.HasPrefix(base, "https://"),
+		upstreamSecrets: upstreamSecrets, settings: settingsService,
+		assets: cfg.Assets, baseURL: base, secure: strings.HasPrefix(base, "https://"),
 		proxies: map[string]http.Handler{},
 	}, nil
 }
@@ -115,6 +128,8 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("POST /api/auth/logout", a.handleLogout)
 	mux.Handle("GET /api/me", a.requireAdmin(http.HandlerFunc(a.handleMe)))
 	mux.Handle("POST /api/account/password", a.requireAdmin(http.HandlerFunc(a.handleChangePassword)))
+	mux.Handle("GET /api/settings", a.requireAdmin(http.HandlerFunc(a.handleSettingsGet)))
+	mux.Handle("PUT /api/settings", a.requireAdmin(http.HandlerFunc(a.handleSettingsUpdate)))
 
 	mux.Handle("GET /api/mcps", a.requireAdmin(http.HandlerFunc(a.handleMCPList)))
 	mux.Handle("POST /api/mcps", a.requireAdmin(http.HandlerFunc(a.handleMCPAdd)))

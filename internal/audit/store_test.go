@@ -38,6 +38,35 @@ func TestSummarySinceCountsFullWindowAndRecentErrors(t *testing.T) {
 	}
 }
 
+func TestRetentionPrunesExpiredEvents(t *testing.T) {
+	store, err := New(filepath.Join(t.TempDir(), "audit.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	for _, event := range []mcpcenter.AuditEvent{
+		{RequestID: "old", MCPID: "m1", ToolName: "old", StartedAt: now.Add(-40 * 24 * time.Hour), Status: "success"},
+		{RequestID: "keep", MCPID: "m1", ToolName: "keep", StartedAt: now.Add(-2 * 24 * time.Hour), Status: "success"},
+	} {
+		if err := store.Record(context.Background(), event); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SetRetentionDays(30); err != nil {
+		t.Fatal(err)
+	}
+	items, err := store.List(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].RequestID != "keep" {
+		t.Fatalf("unexpected retained events: %#v", items)
+	}
+	if store.RetentionDays() != 30 {
+		t.Fatalf("retention days = %d", store.RetentionDays())
+	}
+}
+
 func TestRecordListAndClear(t *testing.T) {
 	store, err := New(filepath.Join(t.TempDir(), "audit.jsonl"))
 	if err != nil {

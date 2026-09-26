@@ -1,5 +1,5 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,editingMCP:null,accessSettings:null,credentials:[],oauthClients:[],upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,editingMCP:null,accessSettings:null,systemSettings:null,credentials:[],oauthClients:[],upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
 const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
@@ -11,7 +11,7 @@ function clearError(node){node.textContent='';node.classList.add('hidden')}
 const mockData={mcps:[
 {id:'mcp_demo_adm',name:'pj-adm',transport:'streamable-http',auth_mode:'none',endpoint:'http://127.0.0.1:8001/mcp',default_include_in_environment:true},
 {id:'mcp_demo_db',name:'wm-test-db',transport:'stdio',auth_mode:'none',executable:'mysql-mcp',args:['--readonly'],default_include_in_environment:false}
-],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},credentials:[],oauthClients:[],upstreamSecrets:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
+],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},systemSettings:{audit_retention_days:30},credentials:[],oauthClients:[],upstreamSecrets:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
 
 async function api(path,options={}){
   if(state.mock)return mockApi(path,options);
@@ -30,6 +30,8 @@ async function mockApi(path,options){
   if(path==='/api/auth/logout')return {ok:true};
   if(path==='/api/version'&&method==='GET')return {version:'dev',commit:'mock123456789',modified:false};
   if(path==='/api/account/password'&&method==='POST')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
+  if(path==='/api/settings'&&method==='GET')return {settings:mockData.systemSettings};
+  if(path==='/api/settings'&&method==='PUT'){mockData.systemSettings=JSON.parse(options.body);return {settings:mockData.systemSettings}}
   if(path==='/api/upstream-secrets'&&method==='GET')return {secrets:mockData.upstreamSecrets};
   const upstreamSecret=path.match(/^\/api\/upstream-secrets\/([^/]+)$/);
   if(upstreamSecret){
@@ -107,7 +109,7 @@ async function enterApp(){
   el('auth-screen').classList.add('hidden');el('app').classList.remove('hidden');
   el('me-name').textContent=state.user?.username||'admin';
   renderAccountSettings();
-  await Promise.allSettled([loadMCPs(),loadOAuth(),loadAccess(),loadVersion(),loadUpstreamSecrets(),loadAuditSummary()]);
+  await Promise.allSettled([loadMCPs(),loadOAuth(),loadAccess(),loadVersion(),loadSystemSettings(),loadUpstreamSecrets(),loadAuditSummary()]);
 }
 async function submitAuth(event){
   event.preventDefault();clearError(el('auth-error'));
@@ -128,7 +130,7 @@ function switchPage(page){
   if(page==='access')Promise.all([loadAccess(),loadOAuth()]).catch(error=>toast(error.message));
   if(page==='logs')loadAudit().catch(error=>toast(error.message));
   if(page==='dashboard')loadAuditSummary().catch(error=>toast(error.message));
-  if(page==='settings'){renderAccountSettings();Promise.all([loadVersion(),loadUpstreamSecrets()]).catch(error=>toast(error.message))}
+  if(page==='settings'){renderAccountSettings();Promise.all([loadVersion(),loadSystemSettings(),loadUpstreamSecrets()]).catch(error=>toast(error.message))}
 }
 async function loadAuditSummary(){
   const result=await api('/api/audit/summary');
@@ -465,6 +467,22 @@ async function loadVersion(){
   if(info.commit)value+=' ('+info.commit+(info.modified?', modified':'')+')';
   node.textContent=value;
 }
+async function loadSystemSettings(){
+  const result=await api('/api/settings');
+  state.systemSettings=result.settings||{audit_retention_days:30};
+  el('settings-audit-retention').value=state.systemSettings.audit_retention_days??30;
+}
+async function saveSystemSettings(){
+  clearError(el('settings-system-error'));
+  const days=Number(el('settings-audit-retention').value);
+  if(!Number.isInteger(days)||days<1||days>3650){showError(el('settings-system-error'),'审计日志保留天数必须是 1 到 3650 的整数');return}
+  try{
+    const result=await api('/api/settings',{method:'PUT',body:JSON.stringify({audit_retention_days:days})});
+    state.systemSettings=result.settings;
+    await Promise.all([loadAuditSummary(),loadAudit().catch(()=>{})]);
+    toast('日志策略已保存，过期日志已清理');
+  }catch(error){showError(el('settings-system-error'),error)}
+}
 async function loadUpstreamSecrets(){
   const result=await api('/api/upstream-secrets');
   state.upstreamSecrets=result.secrets||[];
@@ -669,4 +687,5 @@ el('refresh-audit').onclick=()=>loadAudit().then(()=>toast('日志已刷新')).c
 el('clear-audit').onclick=clearAudit;
 el('audit-search').addEventListener('input',renderAudit);
 el('change-password').onclick=changePassword;
+el('save-system-settings').onclick=saveSystemSettings;
 bootstrap();

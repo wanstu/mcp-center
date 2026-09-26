@@ -30,7 +30,7 @@ dist/<version>/
 - darwin/amd64
 - darwin/arm64
 
-每个构建会注入 Version、Git commit、UTC build time，并生成 `SHA256SUMS.txt` 与 `release-manifest.json`。
+每个构建会注入 Version、Git commit、UTC build time，并生成 `SHA256SUMS.txt` 与 `release-manifest.json`。Manifest 会同时记录 `mcp-center`、`mcp-center-core`、`wails-desktop-kit` 三个源码 commit；发布脚本要求这三个仓库都处于 clean 状态。
 
 ## 验证
 

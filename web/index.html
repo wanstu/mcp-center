@@ -213,9 +213,36 @@
             <div class="setting"><div><strong>Runtime Session Manager</strong><span>连接复用、tools/list 缓存、刷新、断开、配置变更自动失效</span></div><span class="status ok">已接入</span></div>
           </div>
         </div>
+        <div class="panel">
+          <div class="panel-head">
+            <div><h2>上游密钥变量</h2><p>供 MCP Definition 中的 <code>${NAME}</code> 引用。变量值加密保存，不会在列表中回显。</p></div>
+            <button id="add-upstream-secret" class="button primary">添加变量</button>
+          </div>
+          <div id="upstream-secret-table-wrap" class="table-wrap">
+            <table>
+              <thead><tr><th>变量名</th><th>更新时间</th><th>操作</th></tr></thead>
+              <tbody id="upstream-secret-rows"></tbody>
+            </table>
+          </div>
+          <div id="upstream-secret-empty" class="empty hidden">还没有上游密钥变量。</div>
+          <div class="notice">Center 中配置的变量优先于系统环境变量；修改或删除变量会断开已有 MCP Session，下次连接时使用最新值。</div>
+        </div>
       </section>
     </main>
   </div>
+
+  <dialog id="upstream-secret-dialog" class="dialog">
+    <form id="upstream-secret-form" method="dialog">
+      <div class="dialog-head"><div><h2 id="upstream-secret-dialog-title">添加上游密钥变量</h2><p>变量值只用于运行时解析 MCP 配置，不会写入 MCP Definition。</p></div><button type="button" class="icon-button" data-action="close-upstream-secret-dialog">×</button></div>
+      <div class="form-grid">
+        <label class="field span-2">变量名<input id="upstream-secret-name" maxlength="128" placeholder="MCP_API_KEY" autocomplete="off"></label>
+        <label class="field span-2">变量值<input id="upstream-secret-value" type="password" autocomplete="new-password" placeholder="输入密钥值"></label>
+      </div>
+      <div class="notice">保存后不会再次显示原始值。需要更换时使用“替换值”。</div>
+      <p id="upstream-secret-error" class="form-error hidden"></p>
+      <div class="dialog-actions"><button type="button" class="button" data-action="close-upstream-secret-dialog">取消</button><button type="submit" class="button primary">保存</button></div>
+    </form>
+  </dialog>
 
   <dialog id="oauth-client-dialog" class="dialog">
     <form id="oauth-client-form" method="dialog">
@@ -243,7 +270,7 @@
         </div>
         <label class="field span-2">配置 JSON<textarea id="import-content" rows="16" spellcheck="false" placeholder='{"mcpServers":{"example":{"url":"https://example.com/mcp"}}}'></textarea></label>
       </div>
-      <div class="notice">安全要求：导入 Header / env 中的密钥必须使用环境变量引用，例如 <code>${TOKEN}</code>；不会接受明文 Secret。</div>
+      <div class="notice">安全要求：导入 Header / env 中的密钥必须使用环境变量引用，例如 <code>${TOKEN}</code>；实际值可在“设置 → 上游密钥变量”中加密保存。</div>
       <p id="import-error" class="form-error hidden"></p>
       <div class="dialog-actions"><button type="button" class="button" data-action="close-import-dialog">取消</button><button type="submit" class="button primary">预检并导入</button></div>
     </form>
@@ -287,12 +314,12 @@
         <label class="field stdio-only hidden">Args（每行一个）<textarea id="mcp-args" rows="4" placeholder="server.js&#10;--stdio"></textarea></label>
         <label class="field span-2 stdio-only hidden">环境变量（每行 KEY=VALUE）
           <textarea id="mcp-env" rows="4" spellcheck="false" placeholder="API_KEY=${MCP_API_KEY}"></textarea>
-          <small>VALUE 必须使用环境变量引用，例如 <code>${MCP_API_KEY}</code>，不会保存明文密钥。</small>
+          <small>VALUE 必须使用环境变量引用，例如 <code>${MCP_API_KEY}</code>。变量值可在“设置 → 上游密钥变量”中加密保存。</small>
         </label>
         <label class="field span-2 http-only">认证方式<select id="mcp-auth"><option value="none">无</option><option value="headers">请求头（环境变量引用）</option></select></label>
         <label class="field span-2 http-only header-auth-only hidden">请求头（每行 Header=VALUE）
           <textarea id="mcp-headers" rows="4" spellcheck="false" placeholder="Authorization=Bearer ${MCP_TOKEN}&#10;X-API-Key=${API_KEY}"></textarea>
-          <small>VALUE 必须包含环境变量引用，MCP Center 运行时再解析。</small>
+          <small>VALUE 必须包含环境变量引用；可在“设置 → 上游密钥变量”中配置实际值。</small>
         </label>
       </div>
       <p id="mcp-form-error" class="form-error hidden"></p>

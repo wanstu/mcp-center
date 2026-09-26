@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,6 +20,7 @@ import (
 	account "github.com/wanstu/mcp-center-core/auth"
 	oauthcore "github.com/wanstu/mcp-center-core/oauth"
 	auditstore "github.com/wanstu/mcp-center/internal/audit"
+	upstreamsecret "github.com/wanstu/mcp-center/internal/upstreamsecret"
 )
 
 const sessionCookie = "mcp_center_session"
@@ -30,14 +32,15 @@ type Config struct {
 }
 
 type App struct {
-	core    *mcpcenter.Service
-	access  *accesscore.Service
-	account *account.Service
-	oauth   *oauthcore.Service
-	audit   *auditstore.Store
-	assets  fs.FS
-	baseURL string
-	secure  bool
+	core            *mcpcenter.Service
+	access          *accesscore.Service
+	account         *account.Service
+	oauth           *oauthcore.Service
+	audit           *auditstore.Store
+	upstreamSecrets *upstreamsecret.Store
+	assets          fs.FS
+	baseURL         string
+	secure          bool
 
 	proxyMu sync.Mutex
 	proxies map[string]http.Handler
@@ -74,11 +77,25 @@ func New(cfg Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	upstreamSecrets, err := upstreamsecret.New(
+		filepath.Join(cfg.DataDir, "upstream-secrets.json"),
+		filepath.Join(cfg.DataDir, "upstream-secrets.key"),
+	)
+	if err != nil {
+		return nil, err
+	}
 	coreService := mcpcenter.New(store)
 	coreService.SetAuditSink(auditLog)
+	coreService.SetVariableLookup(func(name string) (string, bool) {
+		if value, ok := upstreamSecrets.Lookup(name); ok {
+			return value, true
+		}
+		return os.LookupEnv(name)
+	})
 	return &App{
 		core: coreService, access: accessService, account: accounts, oauth: oauthService, audit: auditLog,
-		assets: cfg.Assets, baseURL: base, secure: strings.HasPrefix(base, "https://"),
+		upstreamSecrets: upstreamSecrets,
+		assets:          cfg.Assets, baseURL: base, secure: strings.HasPrefix(base, "https://"),
 		proxies: map[string]http.Handler{},
 	}, nil
 }
@@ -119,6 +136,11 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("POST /api/access/credentials", a.requireAdmin(http.HandlerFunc(a.handleAccessCredentialCreate)))
 	mux.Handle("PUT /api/access/credentials/{id}", a.requireAdmin(http.HandlerFunc(a.handleAccessCredentialUpdate)))
 	mux.Handle("DELETE /api/access/credentials/{id}", a.requireAdmin(http.HandlerFunc(a.handleAccessCredentialDelete)))
+
+	mux.Handle("GET /api/upstream-secrets", a.requireAdmin(http.HandlerFunc(a.handleUpstreamSecretList)))
+	mux.Handle("PUT /api/upstream-secrets/{name}", a.requireAdmin(http.HandlerFunc(a.handleUpstreamSecretSet)))
+	mux.Handle("DELETE /api/upstream-secrets/{name}", a.requireAdmin(http.HandlerFunc(a.handleUpstreamSecretDelete)))
+
 	mux.Handle("GET /api/audit", a.requireAdmin(http.HandlerFunc(a.handleAuditList)))
 	mux.Handle("DELETE /api/audit", a.requireAdmin(http.HandlerFunc(a.handleAuditClear)))
 	mux.Handle("GET /api/oauth/clients", a.requireAdmin(http.HandlerFunc(a.handleOAuthClientList)))

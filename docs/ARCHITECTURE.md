@@ -99,6 +99,8 @@ Core 继续支持 ADM 已有两类：
 
 HTTP 上游继续支持 Secret-backed Headers。
 
+MCP Center 额外提供“上游密钥变量”存储：Definition 仍只保存 `${NAME}` 引用，实际值由 Center 的变量解析器注入 Core。Center-managed 变量优先于系统环境变量，并使用本地随机主密钥 + AES-GCM 加密保存；Core 不依赖该存储实现。
+
 ADM 现有字段应作为迁移兼容基线：
 
 - id

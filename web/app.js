@@ -1,5 +1,5 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,editingMCP:null,accessSettings:null,credentials:[],oauthClients:[],audits:[],page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,editingMCP:null,accessSettings:null,credentials:[],oauthClients:[],upstreamSecrets:[],audits:[],page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
 const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
@@ -11,7 +11,7 @@ function clearError(node){node.textContent='';node.classList.add('hidden')}
 const mockData={mcps:[
 {id:'mcp_demo_adm',name:'pj-adm',transport:'streamable-http',auth_mode:'none',endpoint:'http://127.0.0.1:8001/mcp',default_include_in_environment:true},
 {id:'mcp_demo_db',name:'wm-test-db',transport:'stdio',auth_mode:'none',executable:'mysql-mcp',args:['--readonly'],default_include_in_environment:false}
-],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},credentials:[],oauthClients:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
+],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},credentials:[],oauthClients:[],upstreamSecrets:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
 
 async function api(path,options={}){
   if(state.mock)return mockApi(path,options);
@@ -30,6 +30,17 @@ async function mockApi(path,options){
   if(path==='/api/auth/logout')return {ok:true};
   if(path==='/api/version'&&method==='GET')return {version:'dev',commit:'mock123456789',modified:false};
   if(path==='/api/account/password'&&method==='POST')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
+  if(path==='/api/upstream-secrets'&&method==='GET')return {secrets:mockData.upstreamSecrets};
+  const upstreamSecret=path.match(/^\/api\/upstream-secrets\/([^/]+)$/);
+  if(upstreamSecret){
+    const name=decodeURIComponent(upstreamSecret[1]);
+    if(method==='PUT'){
+      const now=new Date().toISOString(),existing=mockData.upstreamSecrets.find(x=>x.name===name);
+      const item={name,created_at:existing?.created_at||now,updated_at:now};
+      mockData.upstreamSecrets=mockData.upstreamSecrets.filter(x=>x.name!==name);mockData.upstreamSecrets.push(item);return {secret:item};
+    }
+    if(method==='DELETE'){mockData.upstreamSecrets=mockData.upstreamSecrets.filter(x=>x.name!==name);return {ok:true}}
+  }
   if(path==='/api/oauth/clients'&&method==='GET')return {clients:mockData.oauthClients};
   if(path==='/api/oauth/clients'&&method==='POST'){const input=JSON.parse(options.body),item={client_id:'client_'+Date.now(),created_at:new Date().toISOString(),grant_types:input.grant_types||['authorization_code','refresh_token'],response_types:input.response_types||['code'],...input};mockData.oauthClients.push(item);return {client:item}}
   const oauthClient=path.match(/^\/api\/oauth\/clients\/([^/]+)$/);
@@ -92,7 +103,7 @@ async function enterApp(){
   el('auth-screen').classList.add('hidden');el('app').classList.remove('hidden');
   el('me-name').textContent=state.user?.username||'admin';
   renderAccountSettings();
-  await Promise.allSettled([loadMCPs(),loadOAuth(),loadAccess(),loadVersion()]);
+  await Promise.allSettled([loadMCPs(),loadOAuth(),loadAccess(),loadVersion(),loadUpstreamSecrets()]);
 }
 async function submitAuth(event){
   event.preventDefault();clearError(el('auth-error'));
@@ -112,7 +123,7 @@ function switchPage(page){
   if(page==='tools')refreshToolMCPSelect();
   if(page==='access')Promise.all([loadAccess(),loadOAuth()]).catch(error=>toast(error.message));
   if(page==='logs')loadAudit().catch(error=>toast(error.message));
-  if(page==='settings'){renderAccountSettings();loadVersion().catch(error=>toast(error.message))}
+  if(page==='settings'){renderAccountSettings();Promise.all([loadVersion(),loadUpstreamSecrets()]).catch(error=>toast(error.message))}
 }
 async function loadMCPs(){
   const [result,runtimeResult]=await Promise.all([api('/api/mcps'),api('/api/runtime')]);
@@ -398,6 +409,55 @@ async function loadVersion(){
   if(info.commit)value+=' ('+info.commit+(info.modified?', modified':'')+')';
   node.textContent=value;
 }
+async function loadUpstreamSecrets(){
+  const result=await api('/api/upstream-secrets');
+  state.upstreamSecrets=result.secrets||[];
+  renderUpstreamSecrets();
+}
+function renderUpstreamSecrets(){
+  const body=el('upstream-secret-rows');if(!body)return;
+  body.innerHTML='';
+  for(const item of state.upstreamSecrets){
+    const tr=document.createElement('tr');
+    const updated=item.updated_at?new Date(item.updated_at).toLocaleString():'—';
+    tr.innerHTML='<td><strong>'+escapeHTML(item.name)+'</strong></td><td class="muted">'+escapeHTML(updated)+'</td><td><div class="row"><button class="button ghost small" data-replace>替换值</button><button class="button ghost small" data-delete>删除</button></div></td>';
+    tr.querySelector('[data-replace]').onclick=()=>openUpstreamSecretDialog(item);
+    tr.querySelector('[data-delete]').onclick=()=>deleteUpstreamSecret(item);
+    body.appendChild(tr);
+  }
+  const empty=state.upstreamSecrets.length===0;
+  el('upstream-secret-table-wrap').classList.toggle('hidden',empty);
+  el('upstream-secret-empty').classList.toggle('hidden',!empty);
+}
+function openUpstreamSecretDialog(item=null){
+  clearError(el('upstream-secret-error'));
+  el('upstream-secret-dialog-title').textContent=item?'替换上游密钥变量':'添加上游密钥变量';
+  el('upstream-secret-name').value=item?.name||'';
+  el('upstream-secret-name').readOnly=Boolean(item);
+  el('upstream-secret-value').value='';
+  el('upstream-secret-dialog').showModal();
+  setTimeout(()=>el(item?'upstream-secret-value':'upstream-secret-name').focus(),0);
+}
+async function saveUpstreamSecret(event){
+  event.preventDefault();clearError(el('upstream-secret-error'));
+  const name=el('upstream-secret-name').value.trim(),value=el('upstream-secret-value').value;
+  if(!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)){showError(el('upstream-secret-error'),'变量名只能使用字母、数字、下划线，且不能以数字开头');return}
+  if(!value){showError(el('upstream-secret-error'),'变量值不能为空');return}
+  try{
+    await api('/api/upstream-secrets/'+encodeURIComponent(name),{method:'PUT',body:JSON.stringify({value})});
+    el('upstream-secret-dialog').close();el('upstream-secret-value').value='';
+    await loadUpstreamSecrets();await loadRuntimeStatuses().catch(()=>{});
+    toast('变量已保存，相关 MCP Session 已断开');
+  }catch(error){showError(el('upstream-secret-error'),error)}
+}
+async function deleteUpstreamSecret(item){
+  if(!confirm('删除上游密钥变量 “'+item.name+'”？引用它的 MCP 将无法连接，直到重新配置变量。'))return;
+  try{
+    await api('/api/upstream-secrets/'+encodeURIComponent(item.name),{method:'DELETE'});
+    await loadUpstreamSecrets();await loadRuntimeStatuses().catch(()=>{});
+    toast('变量已删除，相关 MCP Session 已断开');
+  }catch(error){toast('删除失败：'+error.message)}
+}
 function renderAccountSettings(){
   const input=el('settings-username');
   if(input)input.value=state.user?.username||'admin';
@@ -516,6 +576,7 @@ document.addEventListener('click',event=>{
   if(event.target.closest('[data-action="close-credential-dialog"]'))el('credential-dialog').close();
   if(event.target.closest('[data-action="close-import-dialog"]'))el('import-dialog').close();
   if(event.target.closest('[data-action="close-oauth-client-dialog"]'))el('oauth-client-dialog').close();
+  if(event.target.closest('[data-action="close-upstream-secret-dialog"]'))el('upstream-secret-dialog').close();
 });
 el('auth-form').addEventListener('submit',submitAuth);
 el('logout').onclick=async()=>{try{await api('/api/auth/logout',{method:'POST'})}finally{state.user=null;showAuth(false)}};
@@ -541,7 +602,9 @@ el('tool-mcp').addEventListener('change',event=>loadTools(event.target.value));
 el('tool-call').onclick=callTool;
 el('add-credential').onclick=()=>openCredentialDialog();
 el('add-oauth-client').onclick=()=>openOAuthClientDialog();
+el('add-upstream-secret').onclick=()=>openUpstreamSecretDialog();
 el('oauth-client-form').addEventListener('submit',saveOAuthClient);
+el('upstream-secret-form').addEventListener('submit',saveUpstreamSecret);
 el('save-access-settings').onclick=saveAccessSettings;
 el('credential-form').addEventListener('submit',saveCredential);
 el('close-secret').onclick=()=>el('secret-dialog').close();

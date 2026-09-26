@@ -55,6 +55,14 @@ go run ./cmd/mcp-center --listen 127.0.0.1:8610 --base-url http://127.0.0.1:8610
 http://127.0.0.1:8610/
 ```
 
+查看当前版本：
+
+```powershell
+go run ./cmd/mcp-center --version
+```
+
+正式构建可通过 `-ldflags` 注入版本号；未注入时显示 `dev + Git commit`。
+
 默认数据目录使用系统用户配置目录下的 `mcp-center`。开发时可通过 `--data-dir` 指定其他目录。
 
 ## 项目结构

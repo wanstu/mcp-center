@@ -28,6 +28,7 @@ async function mockApi(path,options){
   if(path==='/api/me')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/auth/login')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/auth/logout')return {ok:true};
+  if(path==='/api/version'&&method==='GET')return {version:'dev',commit:'mock123456789',modified:false};
   if(path==='/api/account/password'&&method==='POST')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/oauth/clients'&&method==='GET')return {clients:mockData.oauthClients};
   if(path==='/api/oauth/clients'&&method==='POST'){const input=JSON.parse(options.body),item={client_id:'client_'+Date.now(),created_at:new Date().toISOString(),grant_types:input.grant_types||['authorization_code','refresh_token'],response_types:input.response_types||['code'],...input};mockData.oauthClients.push(item);return {client:item}}
@@ -91,7 +92,7 @@ async function enterApp(){
   el('auth-screen').classList.add('hidden');el('app').classList.remove('hidden');
   el('me-name').textContent=state.user?.username||'admin';
   renderAccountSettings();
-  await Promise.allSettled([loadMCPs(),loadOAuth(),loadAccess()]);
+  await Promise.allSettled([loadMCPs(),loadOAuth(),loadAccess(),loadVersion()]);
 }
 async function submitAuth(event){
   event.preventDefault();clearError(el('auth-error'));
@@ -111,7 +112,7 @@ function switchPage(page){
   if(page==='tools')refreshToolMCPSelect();
   if(page==='access')Promise.all([loadAccess(),loadOAuth()]).catch(error=>toast(error.message));
   if(page==='logs')loadAudit().catch(error=>toast(error.message));
-  if(page==='settings')renderAccountSettings();
+  if(page==='settings'){renderAccountSettings();loadVersion().catch(error=>toast(error.message))}
 }
 async function loadMCPs(){
   const [result,runtimeResult]=await Promise.all([api('/api/mcps'),api('/api/runtime')]);
@@ -300,6 +301,14 @@ async function saveOAuthClient(event){
 async function deleteOAuthClient(item){
   if(!confirm('删除 OAuth Client “'+(item.client_name||item.client_id)+'”？已有授权码和 Token 会同时失效。'))return;
   try{await api('/api/oauth/clients/'+encodeURIComponent(item.client_id),{method:'DELETE'});await loadOAuth();toast('OAuth Client 已删除，旧授权已撤销')}catch(error){toast(error.message)}
+}
+async function loadVersion(){
+  const info=await api('/api/version');
+  const node=el('settings-version');
+  if(!node)return;
+  let value=info.version||'dev';
+  if(info.commit)value+=' ('+info.commit+(info.modified?', modified':'')+')';
+  node.textContent=value;
 }
 function renderAccountSettings(){
   const input=el('settings-username');

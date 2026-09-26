@@ -91,6 +91,7 @@ func (a *App) BaseURL() string             { return a.baseURL }
 
 func (a *App) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/version", a.handleVersion)
 	mux.HandleFunc("GET /api/setup", a.handleSetupStatus)
 	mux.HandleFunc("POST /api/setup/register", a.handleSetupRegister)
 	mux.HandleFunc("POST /api/auth/login", a.handleLogin)

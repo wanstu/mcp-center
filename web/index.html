@@ -130,11 +130,35 @@
           </aside>
           <div class="stack">
             <div class="panel">
-              <div class="panel-head"><div><h2 id="tool-name">选择一个工具</h2><p id="tool-desc">工具描述会显示在这里。</p></div></div>
-              <pre id="tool-schema" class="code-block">{}</pre>
+              <div class="panel-head">
+                <div><h2 id="tool-name">选择一个工具</h2><p id="tool-desc">工具描述会显示在这里。</p></div>
+                <span id="tool-required-summary" class="status">未选择</span>
+              </div>
+              <div class="tool-schema-grid">
+                <div>
+                  <div class="subhead"><strong>Input Schema</strong><span>原始 JSON Schema</span></div>
+                  <pre id="tool-schema" class="code-block">{}</pre>
+                </div>
+                <div>
+                  <div class="subhead">
+                    <div><strong>可用 JSON 示例</strong><span>根据 Schema 自动生成，可直接作为调用参数起点</span></div>
+                    <button id="tool-use-example" class="button ghost small" disabled>填入参数</button>
+                  </div>
+                  <pre id="tool-example" class="code-block">{}</pre>
+                </div>
+              </div>
             </div>
             <div class="panel">
-              <label class="field">调用参数<textarea id="tool-args" rows="8">{}</textarea></label>
+              <div class="panel-head">
+                <div><h2>调用参数</h2><p>Form 模式会自动解析 Schema 的 key、类型、必填项和说明。</p></div>
+                <div class="mode-switch" role="group" aria-label="参数编辑模式">
+                  <button id="tool-mode-form" type="button" class="button small active">Form</button>
+                  <button id="tool-mode-json" type="button" class="button small">JSON</button>
+                </div>
+              </div>
+              <div id="tool-form" class="tool-form"></div>
+              <label id="tool-json-wrap" class="field hidden">JSON 参数<textarea id="tool-args" rows="10">{}</textarea></label>
+              <p id="tool-args-error" class="form-error hidden"></p>
               <div class="row end"><button id="tool-call" class="button primary" disabled>调用工具</button></div>
               <pre id="tool-result" class="code-block result">等待调用…</pre>
             </div>
@@ -143,7 +167,20 @@
       </section>
 
       <section id="page-access" class="page">
-        <div class="page-head"><div><h1>访问授权</h1><p>OAuth 与静态 Access Credential 共用同一 MCP Endpoint。</p></div><button id="add-credential" class="button primary">创建访问密钥</button></div>
+        <div class="page-head"><div><h1>访问授权</h1><p>这里同时展示外部 MCP 接入地址和授权方式。</p></div><button id="add-credential" class="button primary">创建访问密钥</button></div>
+        <div class="panel">
+          <div class="panel-head"><div><h2>MCP 外部接入地址</h2><p>外部 MCP 客户端连接下面的 Streamable HTTP Endpoint。</p></div><span id="connection-base-status" class="status">读取中</span></div>
+          <div class="connection-base-row">
+            <div>
+              <span class="muted">Public Base URL</span>
+              <code id="connection-base-url">读取中…</code>
+            </div>
+            <button id="copy-base-url" class="button ghost small">复制 Base URL</button>
+          </div>
+          <div id="connection-loopback-warning" class="notice hidden">当前 Base URL 是本机地址，只能在本机访问。需要外部接入时，请以公网域名启动 MCP Center，例如 <code>--base-url https://mcp.example.com</code>，并由反向代理转发到 MCP Center。</div>
+          <div id="connection-endpoints" class="connection-endpoints"></div>
+          <div id="connection-endpoints-empty" class="empty hidden">还没有 MCP 服务，添加 MCP 后会在这里生成外部接入地址。</div>
+        </div>
         <div class="panel">
           <div class="panel-head"><div><h2>静态授权通道</h2><p>同一个 Access Credential 可被允许通过 Bearer、Header 或 Query 使用。</p></div><button id="save-access-settings" class="button">保存设置</button></div>
           <div class="channel-grid">

@@ -43,6 +43,9 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - 工作台 24h 调用量与最近错误汇总
 - MCP 服务状态筛选：全部 / 已连接 / 未连接 / 异常
 - 审计日志保留策略：默认 30 天，可在设置页修改；保存后立即清理过期日志
+- 外部 MCP 接入地址总览：按 MCP 显示 `<base-url>/mcp/{id}`，支持直接复制，并提示本机 Base URL 不可外部访问
+- 工具测试参数助手：从 inputSchema 自动生成最小 JSON 示例，并提供 Form / JSON 双模式
+- 工具测试状态按 MCP + Tool 保留参数、模式和最后一次运行结果，切换后可恢复
 
 开发中：
 
@@ -72,7 +75,7 @@ go run ./cmd/mcp-center --version
 RC / Release 构建：
 
 ```powershell
-./scripts/build-release.ps1 -Version v0.1.0-rc.1
+./scripts/build-release.ps1 -Version v0.1.0-rc.2
 ```
 
 详见 `docs/RELEASE.md`。

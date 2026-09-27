@@ -1,5 +1,5 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,editingMCP:null,accessSettings:null,systemSettings:null,credentials:[],oauthClients:[],upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,selectedToolMCPID:'',toolParamMode:'form',toolHistory:new Map(),connectionInfo:null,editingMCP:null,accessSettings:null,systemSettings:null,credentials:[],oauthClients:[],upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
 const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
@@ -29,6 +29,7 @@ async function mockApi(path,options){
   if(path==='/api/auth/login')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/auth/logout')return {ok:true};
   if(path==='/api/version'&&method==='GET')return {version:'dev',commit:'mock123456789',modified:false};
+  if(path==='/api/connection-info'&&method==='GET')return {base_url:location.origin,mcp_endpoint_template:location.origin+'/mcp/{id}',authorization_server_metadata:location.origin+'/.well-known/oauth-authorization-server',is_loopback:/^(localhost|127\.0\.0\.1|\[::1\])(?::|$)/.test(location.host)};
   if(path==='/api/account/password'&&method==='POST')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/settings'&&method==='GET')return {settings:mockData.systemSettings};
   if(path==='/api/settings'&&method==='PUT'){mockData.systemSettings=JSON.parse(options.body);return {settings:mockData.systemSettings}}
@@ -109,7 +110,7 @@ async function enterApp(){
   el('auth-screen').classList.add('hidden');el('app').classList.remove('hidden');
   el('me-name').textContent=state.user?.username||'admin';
   renderAccountSettings();
-  await Promise.allSettled([loadMCPs(),loadOAuth(),loadAccess(),loadVersion(),loadSystemSettings(),loadUpstreamSecrets(),loadAuditSummary()]);
+  await Promise.allSettled([loadMCPs(),loadOAuth(),loadAccess(),loadConnectionInfo(),loadVersion(),loadSystemSettings(),loadUpstreamSecrets(),loadAuditSummary()]);
 }
 async function submitAuth(event){
   event.preventDefault();clearError(el('auth-error'));
@@ -127,7 +128,7 @@ function switchPage(page){
   document.querySelectorAll('.nav button[data-page]').forEach(n=>n.classList.toggle('active',n.dataset.page===page));
   el('page-'+page).classList.add('active');el('page-title').textContent=pageNames[page]||page;
   if(page==='tools')refreshToolMCPSelect();
-  if(page==='access')Promise.all([loadAccess(),loadOAuth()]).catch(error=>toast(error.message));
+  if(page==='access')Promise.all([loadAccess(),loadOAuth(),loadConnectionInfo()]).catch(error=>toast(error.message));
   if(page==='logs')loadAudit().catch(error=>toast(error.message));
   if(page==='dashboard')loadAuditSummary().catch(error=>toast(error.message));
   if(page==='settings'){renderAccountSettings();Promise.all([loadVersion(),loadSystemSettings(),loadUpstreamSecrets()]).catch(error=>toast(error.message))}
@@ -141,7 +142,7 @@ async function loadMCPs(){
   const [result,runtimeResult]=await Promise.all([api('/api/mcps'),api('/api/runtime')]);
   state.mcps=result.mcps||[];
   state.runtime=new Map((runtimeResult.runtime||[]).map(item=>[item.mcp_id,item]));
-  renderMCPs();renderDashboard();refreshToolMCPSelect();
+  renderMCPs();renderDashboard();refreshToolMCPSelect();renderConnectionInfo();
 }
 async function loadRuntimeStatuses(){
   const result=await api('/api/runtime');
@@ -172,9 +173,10 @@ function renderMCPs(){
     const where=m.transport==='stdio'?escapeHTML([m.executable,...(m.args||[])].join(' ')):escapeHTML(m.endpoint||'');
     const disconnect=runtime?.state==='connected'?'<button class="button ghost small" data-op="disconnect">断开</button> ':'';
     const tr=document.createElement('tr');
-    tr.innerHTML='<td><strong>'+escapeHTML(m.name)+'</strong><br><small class="muted">'+escapeHTML(m.id)+'</small></td><td>'+escapeHTML(m.transport)+'</td><td>'+status+'</td><td>'+tools+'</td><td><span class="muted">'+where+'</span></td><td><div class="row"><button class="button small" data-op="probe">刷新</button><button class="button small" data-op="test">测试</button>'+disconnect+'<button class="button ghost small" data-op="edit">编辑</button><button class="button ghost small" data-op="delete">删除</button></div></td>';
+    tr.innerHTML='<td><strong>'+escapeHTML(m.name)+'</strong><br><small class="muted">'+escapeHTML(m.id)+'</small></td><td>'+escapeHTML(m.transport)+'</td><td>'+status+'</td><td>'+tools+'</td><td><span class="muted">'+where+'</span></td><td><div class="row"><button class="button small" data-op="probe">刷新</button><button class="button small" data-op="test">测试</button><button class="button ghost small" data-op="endpoint">复制接入地址</button>'+disconnect+'<button class="button ghost small" data-op="edit">编辑</button><button class="button ghost small" data-op="delete">删除</button></div></td>';
     tr.querySelector('[data-op="probe"]').onclick=()=>probeMCP(m.id);
     tr.querySelector('[data-op="test"]').onclick=()=>{switchPage('tools');el('tool-mcp').value=m.id;loadTools(m.id)};
+    tr.querySelector('[data-op="endpoint"]').onclick=()=>copyMCPExternalURL(m.id);
     tr.querySelector('[data-op="disconnect"]')?.addEventListener('click',()=>disconnectMCP(m.id));
     tr.querySelector('[data-op="edit"]').onclick=()=>openMCPDialog(m);
     tr.querySelector('[data-op="delete"]').onclick=()=>deleteMCP(m);
@@ -394,18 +396,280 @@ async function loadTools(id){
   catch(error){el('tool-list').innerHTML='<div class="form-error">'+escapeHTML(error.message)+'</div>';await loadRuntimeStatuses().catch(()=>{})}
 }
 function renderToolList(tools){
-  const box=el('tool-list');box.innerHTML='';if(!tools.length){box.innerHTML='<div class="empty">未发现工具</div>';selectTool(null);return}
-  for(const tool of tools){const b=document.createElement('button');b.innerHTML='<strong>'+escapeHTML(tool.name)+'</strong><small>'+escapeHTML(tool.description||'')+'</small>';b.onclick=()=>{box.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');selectTool(tool)};box.appendChild(b)}
-  box.querySelector('button')?.click();
+  const box=el('tool-list'),mcpID=el('tool-mcp').value;
+  const previousToolName=state.selectedToolMCPID===mcpID?state.selectedTool?.name:'';
+  box.innerHTML='';
+  if(!tools.length){box.innerHTML='<div class="empty">未发现工具</div>';selectTool(null);return}
+  for(const tool of tools){
+    const b=document.createElement('button');b.dataset.toolName=tool.name;
+    b.innerHTML='<strong>'+escapeHTML(tool.name)+'</strong><small>'+escapeHTML(tool.description||'')+'</small>';
+    b.onclick=()=>{box.querySelectorAll('button').forEach(x=>x.classList.remove('active'));b.classList.add('active');selectTool(tool)};
+    box.appendChild(b);
+  }
+  const preferred=previousToolName?[...box.querySelectorAll('button')].find(b=>b.dataset.toolName===previousToolName):null;
+  (preferred||box.querySelector('button'))?.click();
 }
-function selectTool(tool){state.selectedTool=tool;el('tool-name').textContent=tool?.name||'选择一个工具';el('tool-desc').textContent=tool?.description||'工具描述会显示在这里。';el('tool-schema').textContent=json(tool?.input_schema||{});el('tool-call').disabled=!tool}
+function normalizeToolSchema(tool){
+  let schema=tool?.input_schema||{};
+  if(typeof schema==='string'){try{schema=JSON.parse(schema)}catch{return {}}}
+  return schema&&typeof schema==='object'&&!Array.isArray(schema)?schema:{};
+}
+function effectiveSchema(schema){
+  if(!schema||typeof schema!=='object')return {};
+  if(Array.isArray(schema.allOf)&&schema.allOf.length){
+    const merged={...schema,properties:{...(schema.properties||{})},required:[...(schema.required||[])]};
+    for(const part of schema.allOf){const p=effectiveSchema(part);Object.assign(merged.properties,p.properties||{});merged.required=[...new Set([...merged.required,...(p.required||[])])];if(!merged.type&&p.type)merged.type=p.type}
+    return merged;
+  }
+  if(Array.isArray(schema.oneOf)&&schema.oneOf.length)return {...schema,...effectiveSchema(schema.oneOf[0])};
+  if(Array.isArray(schema.anyOf)&&schema.anyOf.length){const first=schema.anyOf.find(x=>x?.type!=='null')||schema.anyOf[0];return {...schema,...effectiveSchema(first)}}
+  return schema;
+}
+function schemaValueType(schema){
+  schema=effectiveSchema(schema);
+  let type=schema?.type;
+  if(Array.isArray(type))type=type.find(x=>x!=='null')||type[0];
+  if(type)return type;
+  if(schema?.properties)return 'object';
+  if(schema?.items)return 'array';
+  if(schema?.default!==undefined)return Array.isArray(schema.default)?'array':typeof schema.default;
+  return 'string';
+}
+function firstSchemaValue(schema){
+  if(schema?.const!==undefined)return schema.const;
+  if(schema?.default!==undefined)return schema.default;
+  if(schema?.example!==undefined)return schema.example;
+  if(Array.isArray(schema?.examples)&&schema.examples.length)return schema.examples[0];
+  if(Array.isArray(schema?.enum)&&schema.enum.length)return schema.enum[0];
+  return undefined;
+}
+function exampleStringForKey(key,schema){
+  const format=String(schema?.format||'').toLowerCase(),name=String(key||'').toLowerCase();
+  let value='example';
+  if(name==='sql'||name.endsWith('_sql')||name.includes('statement'))value='SELECT 1 AS ok';
+  else if(name.includes('database')||name==='db')value='database_name';
+  else if(name.includes('table'))value='table_name';
+  else if(name.includes('url')||name.includes('uri')||format==='uri'||format==='url')value='https://example.com';
+  else if(name.includes('path'))value='/path/to/resource';
+  else if(name.includes('query')||name.includes('search'))value='search text';
+  else if(name.includes('message')||name.includes('prompt')||name.includes('content')||name==='text')value='example text';
+  else if(name==='host'||name.endsWith('_host'))value='127.0.0.1';
+  else if(name.endsWith('_id')||name==='id')value='example-id';
+  else if(name.includes('name'))value='example-name';
+  else if(format==='email')value='user@example.com';
+  else if(format==='date')value='2026-09-27';
+  else if(format==='date-time')value='2026-09-27T12:00:00Z';
+  const min=Number(schema?.minLength||0);
+  while(value.length<min)value+='x';
+  return value;
+}
+function buildSchemaExample(rawSchema,key='',depth=0){
+  const schema=effectiveSchema(rawSchema);
+  const explicit=firstSchemaValue(schema);if(explicit!==undefined)return typeof structuredClone==='function'?structuredClone(explicit):JSON.parse(JSON.stringify(explicit));
+  if(depth>5)return null;
+  const type=schemaValueType(schema);
+  if(type==='object'){
+    const out={},required=new Set(schema.required||[]);
+    for(const [name,child] of Object.entries(schema.properties||{})){
+      if(required.has(name)||firstSchemaValue(effectiveSchema(child))!==undefined)out[name]=buildSchemaExample(child,name,depth+1);
+    }
+    return out;
+  }
+  if(type==='array'){const min=Math.max(1,Number(schema.minItems||0));const item=buildSchemaExample(schema.items||{},key,depth+1);return Array.from({length:min},()=>item)}
+  if(type==='integer'){const n=Number.isFinite(Number(schema.minimum))?Math.ceil(Number(schema.minimum)):1;return n}
+  if(type==='number'){const n=Number.isFinite(Number(schema.minimum))?Number(schema.minimum):1;return n}
+  if(type==='boolean')return false;
+  if(type==='null')return null;
+  return exampleStringForKey(key,schema);
+}
+function toolSchemaSummary(schema){
+  schema=effectiveSchema(schema);const props=Object.keys(schema.properties||{}),required=schema.required||[];
+  if(!props.length)return schemaValueType(schema)==='object'?'无固定字段':'JSON '+schemaValueType(schema);
+  return '必填 '+required.length+' / 字段 '+props.length;
+}
+function createToolControl(name,rawSchema,required,value){
+  const schema=effectiveSchema(rawSchema),type=schemaValueType(schema),wrap=document.createElement('div');
+  wrap.className='tool-param'+((type==='object'||type==='array'||(type==='string'&&(/sql|query|prompt|content|text|message/i.test(name)||String(schema.description||'').length>100)))?' wide':'');
+  const head=document.createElement('div');head.className='tool-param-head';
+  const title=document.createElement('div');title.className='tool-param-name';title.innerHTML='<code>'+escapeHTML(name)+'</code>'+(required?'<span class="tool-param-required">*</span>':'');
+  const meta=document.createElement('span');meta.className='tool-param-meta';meta.textContent=type+(required?' · required':' · optional');head.append(title,meta);wrap.appendChild(head);
+  const desc=document.createElement('div');desc.className='tool-param-desc';desc.textContent=schema.description||'';wrap.appendChild(desc);
+  let control;
+  if(Array.isArray(schema.enum)&&schema.enum.length){
+    control=document.createElement('select');if(!required){const opt=document.createElement('option');opt.value='';opt.textContent='未设置';control.appendChild(opt)}
+    for(const item of schema.enum){const opt=document.createElement('option');opt.value=JSON.stringify(item);opt.textContent=String(item);control.appendChild(opt)}
+    if(value!==undefined)control.value=JSON.stringify(value);control.dataset.valueEncoding='json';
+  }else if(type==='boolean'){
+    control=document.createElement('select');if(!required){const blank=document.createElement('option');blank.value='';blank.textContent='未设置';control.appendChild(blank)}
+    for(const item of [true,false]){const opt=document.createElement('option');opt.value=String(item);opt.textContent=String(item);control.appendChild(opt)}
+    if(value!==undefined)control.value=String(Boolean(value));
+  }else if(type==='object'||type==='array'){
+    control=document.createElement('textarea');control.spellcheck=false;if(value!==undefined)control.value=JSON.stringify(value,null,2);
+  }else if(type==='integer'||type==='number'){
+    control=document.createElement('input');control.type='number';control.step=type==='integer'?'1':'any';if(schema.minimum!==undefined)control.min=String(schema.minimum);if(schema.maximum!==undefined)control.max=String(schema.maximum);if(value!==undefined)control.value=String(value);
+  }else if(type==='string'&&(/sql|query|prompt|content|text|message/i.test(name)||String(schema.description||'').length>100)){
+    control=document.createElement('textarea');control.spellcheck=false;control.value=value===undefined?'':String(value);
+  }else{
+    control=document.createElement('input');control.type='text';control.value=value===undefined?'':String(value);if(schema.minLength!==undefined)control.minLength=Number(schema.minLength);if(schema.maxLength!==undefined)control.maxLength=Number(schema.maxLength);
+  }
+  control.classList.add('tool-param-control');control.dataset.paramName=name;control.dataset.paramType=type;control.dataset.required=required?'1':'0';
+  const sync=()=>{syncToolFormToJSON(false);saveCurrentToolState()};
+  control.addEventListener('input',sync);control.addEventListener('change',sync);wrap.appendChild(control);return wrap;
+}
+function renderToolForm(schema,values={}){
+  schema=effectiveSchema(schema);const box=el('tool-form');box.innerHTML='';const props=schema.properties||{},required=new Set(schema.required||[]);
+  const entries=Object.entries(props);
+  if(!entries.length){box.innerHTML='<div class="tool-form-empty">该 Schema 没有可解析的固定 key，可切换到 JSON 模式直接填写。</div>';return}
+  for(const [name,child] of entries)box.appendChild(createToolControl(name,child,required.has(name),values?.[name]));
+}
+function collectToolForm(validateRequired=true){
+  const out={};let firstError=null;
+  document.querySelectorAll('#tool-form .tool-param-control').forEach(control=>{
+    control.classList.remove('tool-param-invalid');const name=control.dataset.paramName,type=control.dataset.paramType,required=control.dataset.required==='1',raw=control.value;
+    if(raw===''&&!required)return;
+    if(raw===''&&required){control.classList.add('tool-param-invalid');firstError=firstError||('必填参数 '+name+' 不能为空');return}
+    try{
+      let value;
+      if(control.dataset.valueEncoding==='json')value=JSON.parse(raw);
+      else if(type==='boolean')value=raw==='true';
+      else if(type==='integer'){value=Number(raw);if(!Number.isInteger(value))throw new Error('必须是整数')}
+      else if(type==='number'){value=Number(raw);if(!Number.isFinite(value))throw new Error('必须是数字')}
+      else if(type==='object'||type==='array'){value=JSON.parse(raw);if(type==='array'&&!Array.isArray(value))throw new Error('必须是 JSON 数组');if(type==='object'&&(Array.isArray(value)||value===null||typeof value!=='object'))throw new Error('必须是 JSON 对象')}
+      else value=raw;
+      out[name]=value;
+    }catch(error){control.classList.add('tool-param-invalid');firstError=firstError||(name+'：'+error.message)}
+  });
+  if(validateRequired&&firstError)throw new Error(firstError);return out;
+}
+function syncToolFormToJSON(showError=true){
+  try{const args=collectToolForm(showError);el('tool-args').value=JSON.stringify(args,null,2);if(showError)clearError(el('tool-args-error'));return args}
+  catch(error){if(showError)showError(el('tool-args-error'),error);throw error}
+}
+function toolHistoryKey(mcpID=state.selectedToolMCPID,tool=state.selectedTool){
+  return mcpID&&tool?.name?mcpID+'::'+tool.name:'';
+}
+function saveCurrentToolState(){
+  const key=toolHistoryKey();if(!key)return;
+  const previous=state.toolHistory.get(key)||{};
+  state.toolHistory.set(key,{
+    ...previous,
+    mode:state.toolParamMode,
+    argsJSON:el('tool-args').value||'{}',
+    resultText:el('tool-result').textContent||'等待调用…'
+  });
+}
+function applyToolParamModeUI(mode){
+  state.toolParamMode=mode;
+  el('tool-form').classList.toggle('hidden',mode!=='form');
+  el('tool-json-wrap').classList.toggle('hidden',mode!=='json');
+  el('tool-mode-form').classList.toggle('active',mode==='form');
+  el('tool-mode-json').classList.toggle('active',mode==='json');
+}
+function setToolParamMode(mode){
+  if(mode!=='form'&&mode!=='json')return;
+  if(mode==='form'&&state.toolParamMode==='json'){
+    try{
+      const values=JSON.parse(el('tool-args').value||'{}');
+      if(values===null||Array.isArray(values)||typeof values!=='object')throw new Error('调用参数必须是 JSON 对象');
+      renderToolForm(normalizeToolSchema(state.selectedTool),values);
+      clearError(el('tool-args-error'));
+    }catch(error){
+      showError(el('tool-args-error'),'JSON 参数格式错误：'+error.message);
+      return;
+    }
+  }else if(mode==='json'&&state.toolParamMode==='form'){
+    try{syncToolFormToJSON(false)}catch{}
+  }
+  applyToolParamModeUI(mode);
+  saveCurrentToolState();
+}
+function applyToolExample(){
+  if(!state.selectedTool)return;
+  const schema=normalizeToolSchema(state.selectedTool),example=buildSchemaExample(schema)??{};
+  el('tool-args').value=JSON.stringify(example,null,2);
+  renderToolForm(schema,example);
+  clearError(el('tool-args-error'));
+  saveCurrentToolState();
+}
+function selectTool(tool){
+  saveCurrentToolState();
+  const mcpID=el('tool-mcp').value||'';
+  state.selectedTool=tool;
+  state.selectedToolMCPID=tool?mcpID:'';
+  el('tool-name').textContent=tool?.name||'选择一个工具';
+  el('tool-desc').textContent=tool?.description||'工具描述会显示在这里。';
+  const schema=normalizeToolSchema(tool);
+  el('tool-schema').textContent=json(schema);
+  el('tool-required-summary').textContent=tool?toolSchemaSummary(schema):'未选择';
+  el('tool-call').disabled=!tool;
+  el('tool-use-example').disabled=!tool;
+  clearError(el('tool-args-error'));
+  if(!tool){
+    el('tool-example').textContent='{}';
+    el('tool-args').value='{}';
+    el('tool-result').textContent='等待调用…';
+    renderToolForm({},{});
+    applyToolParamModeUI('form');
+    return;
+  }
+
+  const example=buildSchemaExample(schema)??{};
+  el('tool-example').textContent=JSON.stringify(example,null,2);
+  const cached=state.toolHistory.get(toolHistoryKey(mcpID,tool));
+  if(cached){
+    el('tool-args').value=cached.argsJSON||JSON.stringify(example,null,2);
+    let values=example;
+    try{
+      const parsed=JSON.parse(el('tool-args').value||'{}');
+      if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))values=parsed;
+    }catch{}
+    renderToolForm(schema,values);
+    el('tool-result').textContent=cached.resultText||'等待调用…';
+    applyToolParamModeUI(cached.mode==='json'?'json':'form');
+  }else{
+    el('tool-args').value=JSON.stringify(example,null,2);
+    renderToolForm(schema,example);
+    el('tool-result').textContent='等待调用…';
+    applyToolParamModeUI('form');
+    saveCurrentToolState();
+  }
+}
 async function callTool(){
   const mcpID=el('tool-mcp').value;if(!mcpID||!state.selectedTool)return;
-  let args;try{args=JSON.parse(el('tool-args').value||'{}')}catch(error){toast('参数不是合法 JSON');return}
+  clearError(el('tool-args-error'));
+  const tool=state.selectedTool,key=toolHistoryKey(mcpID,tool),mode=state.toolParamMode;
+  let args;
+  try{
+    if(mode==='form')args=syncToolFormToJSON(true);
+    else{
+      args=JSON.parse(el('tool-args').value||'{}');
+      if(args===null||Array.isArray(args)||typeof args!=='object')throw new Error('调用参数必须是 JSON 对象');
+    }
+  }catch(error){
+    showError(el('tool-args-error'),error.message||String(error));
+    return;
+  }
+
+  const argsJSON=JSON.stringify(args,null,2);
+  state.toolHistory.set(key,{mode,argsJSON,resultText:'调用中…'});
   el('tool-result').textContent='调用中…';el('tool-call').disabled=true;
-  try{const result=await api('/api/mcps/'+encodeURIComponent(mcpID)+'/call',{method:'POST',body:JSON.stringify({name:state.selectedTool.name,arguments:args})});el('tool-result').textContent=json(result)}
-  catch(error){el('tool-result').textContent='ERROR: '+error.message}
-  finally{el('tool-call').disabled=false;loadAuditSummary().catch(()=>{})}
+  let resultText;
+  try{
+    const result=await api('/api/mcps/'+encodeURIComponent(mcpID)+'/call',{method:'POST',body:JSON.stringify({name:tool.name,arguments:args})});
+    resultText=json(result);
+  }catch(error){
+    resultText='ERROR: '+error.message;
+  }finally{
+    const latest=state.toolHistory.get(key)||{mode,argsJSON};
+    state.toolHistory.set(key,{...latest,resultText});
+    if(toolHistoryKey()===key){
+      el('tool-result').textContent=resultText;
+      el('tool-call').disabled=false;
+    }else{
+      el('tool-call').disabled=!state.selectedTool;
+    }
+    loadAuditSummary().catch(()=>{});
+  }
 }
 async function loadOAuth(){
   try{
@@ -458,6 +722,52 @@ async function saveOAuthClient(event){
 async function deleteOAuthClient(item){
   if(!confirm('删除 OAuth Client “'+(item.client_name||item.client_id)+'”？已有授权码和 Token 会同时失效。'))return;
   try{await api('/api/oauth/clients/'+encodeURIComponent(item.client_id),{method:'DELETE'});await loadOAuth();toast('OAuth Client 已删除，旧授权已撤销')}catch(error){toast(error.message)}
+}
+async function copyTextValue(value,successMessage='已复制'){
+  try{
+    await navigator.clipboard.writeText(value);
+  }catch{
+    const input=document.createElement('textarea');
+    input.value=value;input.style.position='fixed';input.style.opacity='0';
+    document.body.appendChild(input);input.select();
+    const ok=document.execCommand('copy');input.remove();
+    if(!ok)throw new Error('copy failed');
+  }
+  toast(successMessage);
+}
+function mcpExternalURL(id){
+  const base=state.connectionInfo?.base_url;
+  return base?base.replace(/\/$/,'')+'/mcp/'+encodeURIComponent(id):'';
+}
+async function copyMCPExternalURL(id){
+  if(!state.connectionInfo)await loadConnectionInfo();
+  const url=mcpExternalURL(id);
+  if(!url){toast('暂时无法获取接入地址');return}
+  await copyTextValue(url,'MCP 接入地址已复制');
+}
+async function loadConnectionInfo(){
+  state.connectionInfo=await api('/api/connection-info');
+  renderConnectionInfo();
+}
+function renderConnectionInfo(){
+  const info=state.connectionInfo;
+  if(!info)return;
+  el('connection-base-url').textContent=info.base_url||'—';
+  const status=el('connection-base-status');
+  status.textContent=info.is_loopback?'仅本机':'外部地址';
+  status.className='status '+(info.is_loopback?'warn':'ok');
+  el('connection-loopback-warning').classList.toggle('hidden',!info.is_loopback);
+  const box=el('connection-endpoints');box.innerHTML='';
+  for(const m of state.mcps){
+    const url=(info.base_url||'').replace(/\/$/,'')+'/mcp/'+encodeURIComponent(m.id);
+    const row=document.createElement('div');row.className='connection-endpoint';
+    row.innerHTML='<div><strong>'+escapeHTML(m.name)+'</strong><code>'+escapeHTML(url)+'</code><small>MCP ID: '+escapeHTML(m.id)+'</small></div><button class="button ghost small" type="button">复制地址</button>';
+    row.querySelector('button').onclick=()=>copyTextValue(url,'MCP 接入地址已复制');
+    box.appendChild(row);
+  }
+  const empty=state.mcps.length===0;
+  box.classList.toggle('hidden',empty);
+  el('connection-endpoints-empty').classList.toggle('hidden',!empty);
 }
 async function loadVersion(){
   const info=await api('/api/version');
@@ -672,8 +982,13 @@ el('mcp-status-filter').addEventListener('change',renderMCPs);
 el('mcp-transport').addEventListener('change',updateTransportFields);
 el('mcp-auth').addEventListener('change',updateAuthFields);
 el('mcp-form').addEventListener('submit',saveMCP);
-el('tool-mcp').addEventListener('change',event=>loadTools(event.target.value));
+el('tool-mcp').addEventListener('change',event=>{selectTool(null);loadTools(event.target.value)});
+el('tool-args').addEventListener('input',saveCurrentToolState);
+el('tool-mode-form').onclick=()=>setToolParamMode('form');
+el('tool-mode-json').onclick=()=>setToolParamMode('json');
+el('tool-use-example').onclick=applyToolExample;
 el('tool-call').onclick=callTool;
+el('copy-base-url').onclick=()=>state.connectionInfo?.base_url&&copyTextValue(state.connectionInfo.base_url,'Base URL 已复制');
 el('add-credential').onclick=()=>openCredentialDialog();
 el('add-oauth-client').onclick=()=>openOAuthClientDialog();
 el('add-upstream-secret').onclick=()=>openUpstreamSecretDialog();

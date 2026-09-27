@@ -29,7 +29,7 @@ async function mockApi(path,options){
   if(path==='/api/auth/login')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/auth/logout')return {ok:true};
   if(path==='/api/version'&&method==='GET')return {version:'dev',commit:'mock123456789',modified:false};
-  if(path==='/api/connection-info'&&method==='GET')return {base_url:location.origin,mcp_endpoint_template:location.origin+'/mcp/{id}',authorization_server_metadata:location.origin+'/.well-known/oauth-authorization-server',is_loopback:/^(localhost|127\.0\.0\.1|\[::1\])(?::|$)/.test(location.host)};
+  if(path==='/api/connection-info'&&method==='GET')return {base_url:location.origin,mcp_endpoint_template:location.origin+'/mcp/{id}',mcp_id_endpoint_template:location.origin+'/mcp/{id}',mcp_name_endpoint_template:location.origin+'/mcp/{name}',authorization_server_metadata:location.origin+'/.well-known/oauth-authorization-server',is_loopback:/^(localhost|127\.0\.0\.1|\[::1\])(?::|$)/.test(location.host)};
   if(path==='/api/account/password'&&method==='POST')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/settings'&&method==='GET')return {settings:mockData.systemSettings};
   if(path==='/api/settings'&&method==='PUT'){mockData.systemSettings=JSON.parse(options.body);return {settings:mockData.systemSettings}}
@@ -176,7 +176,7 @@ function renderMCPs(){
     tr.innerHTML='<td><strong>'+escapeHTML(m.name)+'</strong><br><small class="muted">'+escapeHTML(m.id)+'</small></td><td>'+escapeHTML(m.transport)+'</td><td>'+status+'</td><td>'+tools+'</td><td><span class="muted">'+where+'</span></td><td><div class="row"><button class="button small" data-op="probe">刷新</button><button class="button small" data-op="test">测试</button><button class="button ghost small" data-op="endpoint">复制接入地址</button>'+disconnect+'<button class="button ghost small" data-op="edit">编辑</button><button class="button ghost small" data-op="delete">删除</button></div></td>';
     tr.querySelector('[data-op="probe"]').onclick=()=>probeMCP(m.id);
     tr.querySelector('[data-op="test"]').onclick=()=>{switchPage('tools');el('tool-mcp').value=m.id;loadTools(m.id)};
-    tr.querySelector('[data-op="endpoint"]').onclick=()=>copyMCPExternalURL(m.id);
+    tr.querySelector('[data-op="endpoint"]').onclick=()=>copyMCPExternalURL(m,'name');
     tr.querySelector('[data-op="disconnect"]')?.addEventListener('click',()=>disconnectMCP(m.id));
     tr.querySelector('[data-op="edit"]').onclick=()=>openMCPDialog(m);
     tr.querySelector('[data-op="delete"]').onclick=()=>deleteMCP(m);
@@ -735,15 +735,17 @@ async function copyTextValue(value,successMessage='已复制'){
   }
   toast(successMessage);
 }
-function mcpExternalURL(id){
+function mcpExternalURL(mcp,kind='name'){
   const base=state.connectionInfo?.base_url;
-  return base?base.replace(/\/$/,'')+'/mcp/'+encodeURIComponent(id):'';
+  if(!base||!mcp)return '';
+  const ref=kind==='id'?mcp.id:mcp.name;
+  return base.replace(/\/$/,'')+'/mcp/'+encodeURIComponent(ref);
 }
-async function copyMCPExternalURL(id){
+async function copyMCPExternalURL(mcp,kind='name'){
   if(!state.connectionInfo)await loadConnectionInfo();
-  const url=mcpExternalURL(id);
+  const url=mcpExternalURL(mcp,kind);
   if(!url){toast('暂时无法获取接入地址');return}
-  await copyTextValue(url,'MCP 接入地址已复制');
+  await copyTextValue(url,kind==='id'?'MCP ID 地址已复制':'MCP Name 地址已复制');
 }
 async function loadConnectionInfo(){
   state.connectionInfo=await api('/api/connection-info');
@@ -759,10 +761,11 @@ function renderConnectionInfo(){
   el('connection-loopback-warning').classList.toggle('hidden',!info.is_loopback);
   const box=el('connection-endpoints');box.innerHTML='';
   for(const m of state.mcps){
-    const url=(info.base_url||'').replace(/\/$/,'')+'/mcp/'+encodeURIComponent(m.id);
+    const nameURL=mcpExternalURL(m,'name'),idURL=mcpExternalURL(m,'id');
     const row=document.createElement('div');row.className='connection-endpoint';
-    row.innerHTML='<div><strong>'+escapeHTML(m.name)+'</strong><code>'+escapeHTML(url)+'</code><small>MCP ID: '+escapeHTML(m.id)+'</small></div><button class="button ghost small" type="button">复制地址</button>';
-    row.querySelector('button').onclick=()=>copyTextValue(url,'MCP 接入地址已复制');
+    row.innerHTML='<div class="connection-endpoint-main"><strong>'+escapeHTML(m.name)+'</strong><small>MCP ID: '+escapeHTML(m.id)+'</small><div class="connection-address"><span>Name 地址</span><code>'+escapeHTML(nameURL)+'</code><button class="button ghost small" type="button" data-copy-name>复制</button></div><div class="connection-address"><span>ID 地址</span><code>'+escapeHTML(idURL)+'</code><button class="button ghost small" type="button" data-copy-id>复制</button></div></div>';
+    row.querySelector('[data-copy-name]').onclick=()=>copyMCPExternalURL(m,'name');
+    row.querySelector('[data-copy-id]').onclick=()=>copyMCPExternalURL(m,'id');
     box.appendChild(row);
   }
   const empty=state.mcps.length===0;

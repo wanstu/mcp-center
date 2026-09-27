@@ -82,10 +82,18 @@ func (a *App) handleAuthorizationServerMetadata(w http.ResponseWriter, _ *http.R
 }
 
 func (a *App) handleProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
-	resource := a.baseURL + "/mcp"
+	resource := strings.TrimRight(a.baseURL, "/") + "/mcp"
 	suffix := strings.TrimPrefix(r.URL.Path, "/.well-known/oauth-protected-resource")
-	if suffix != "" && suffix != "/" {
-		resource = a.baseURL + suffix
+	if strings.HasPrefix(suffix, "/mcp/") {
+		ref := strings.TrimPrefix(suffix, "/mcp/")
+		if _, err := a.core.GetByRef(ref); err != nil {
+			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		resource = a.mcpResourceURL(ref)
+	} else if suffix != "" && suffix != "/" {
+		writeError(w, http.StatusNotFound, errors.New("unknown protected resource"))
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"resource":                 resource,
@@ -265,14 +273,30 @@ func (a *App) authorizeViewFromValues(values url.Values) (authorizeView, error) 
 		return authorizeView{}, errors.New("this version supports only mcp:* scope")
 	}
 	if !a.isLocalMCPResource(view.Resource) {
-		return authorizeView{}, errors.New("resource must identify an MCP Center /mcp/{id} endpoint")
+		return authorizeView{}, errors.New("resource must identify an existing MCP Center /mcp/{id-or-name} endpoint")
 	}
 	return view, nil
 }
 
 func (a *App) isLocalMCPResource(resource string) bool {
-	prefix := a.baseURL + "/mcp/"
-	return strings.HasPrefix(resource, prefix) && len(strings.TrimPrefix(resource, prefix)) > 0
+	base, err := url.Parse(a.baseURL)
+	if err != nil {
+		return false
+	}
+	target, err := url.Parse(resource)
+	if err != nil || target.RawQuery != "" || target.Fragment != "" || !strings.EqualFold(base.Scheme, target.Scheme) || !strings.EqualFold(base.Host, target.Host) {
+		return false
+	}
+	prefix := strings.TrimRight(base.Path, "/") + "/mcp/"
+	if !strings.HasPrefix(target.Path, prefix) {
+		return false
+	}
+	ref := strings.TrimPrefix(target.Path, prefix)
+	if ref == "" {
+		return false
+	}
+	_, err = a.core.GetByRef(ref)
+	return err == nil
 }
 
 func (v authorizeView) query() url.Values {

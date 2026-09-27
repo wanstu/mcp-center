@@ -19,6 +19,8 @@ func TestConnectionInfoAPI(t *testing.T) {
 	for _, expected := range []string{
 		"\"base_url\":\"http://127.0.0.1:8610\"",
 		"\"mcp_endpoint_template\":\"http://127.0.0.1:8610/mcp/{id}\"",
+		"\"mcp_id_endpoint_template\":\"http://127.0.0.1:8610/mcp/{id}\"",
+		"\"mcp_name_endpoint_template\":\"http://127.0.0.1:8610/mcp/{name}\"",
 		"\"is_loopback\":true",
 	} {
 		if !strings.Contains(body, expected) {

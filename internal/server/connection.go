@@ -6,6 +6,14 @@ import (
 	"strings"
 )
 
+func (a *App) mcpResourceURL(ref string) string {
+	return strings.TrimRight(a.baseURL, "/") + "/mcp/" + url.PathEscape(ref)
+}
+
+func (a *App) mcpProtectedResourceMetadataURL(ref string) string {
+	return strings.TrimRight(a.baseURL, "/") + "/.well-known/oauth-protected-resource/mcp/" + url.PathEscape(ref)
+}
+
 func (a *App) handleConnectionInfo(w http.ResponseWriter, _ *http.Request) {
 	parsed, _ := url.Parse(a.baseURL)
 	host := strings.ToLower(parsed.Hostname())
@@ -13,6 +21,8 @@ func (a *App) handleConnectionInfo(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"base_url":                      a.baseURL,
 		"mcp_endpoint_template":         a.baseURL + "/mcp/{id}",
+		"mcp_id_endpoint_template":      a.baseURL + "/mcp/{id}",
+		"mcp_name_endpoint_template":    a.baseURL + "/mcp/{name}",
 		"authorization_server_metadata": a.baseURL + "/.well-known/oauth-authorization-server",
 		"is_loopback":                   isLoopback,
 	})

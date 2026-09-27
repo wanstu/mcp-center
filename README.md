@@ -43,7 +43,7 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - 工作台 24h 调用量与最近错误汇总
 - MCP 服务状态筛选：全部 / 已连接 / 未连接 / 异常
 - 审计日志保留策略：默认 30 天，可在设置页修改；保存后立即清理过期日志
-- 外部 MCP 接入地址总览：按 MCP 显示 `<base-url>/mcp/{id}`，支持直接复制，并提示本机 Base URL 不可外部访问
+- 外部 MCP 接入地址总览：同一 MCP 同时支持 `<base-url>/mcp/{name}` 与 `<base-url>/mcp/{id}`；Name 地址易读，ID 地址稳定，均支持 OAuth / Static Credential
 - 工具测试参数助手：从 inputSchema 自动生成最小 JSON 示例，并提供 Form / JSON 双模式
 - 工具测试状态按 MCP + Tool 保留参数、模式和最后一次运行结果，切换后可恢复
 

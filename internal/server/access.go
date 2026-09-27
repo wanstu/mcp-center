@@ -108,7 +108,7 @@ func validateCenterAccessScopes(scopes []string) error {
 	return nil
 }
 
-func (a *App) authenticateMCPRequest(r *http.Request, id string) (mcpPrincipal, error) {
+func (a *App) authenticateMCPRequest(r *http.Request, ref string) (mcpPrincipal, error) {
 	settings, err := a.access.Settings()
 	if err != nil {
 		return mcpPrincipal{}, err
@@ -138,7 +138,7 @@ func (a *App) authenticateMCPRequest(r *http.Request, id string) (mcpPrincipal, 
 	}
 
 	candidate := candidates[0]
-	resource := a.baseURL + "/mcp/" + id
+	resource := a.mcpResourceURL(ref)
 	if candidate.Channel == accesscore.ChannelBearer {
 		grant, oauthErr := a.oauth.ValidateAccessTokenForResource(candidate.Secret, resource)
 		if oauthErr == nil {

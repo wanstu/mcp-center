@@ -39,9 +39,19 @@ try {
     $buildTime = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
     $ldflags = "-s -w -X github.com/wanstu/mcp-center/internal/buildinfo.Version=$Version -X github.com/wanstu/mcp-center/internal/buildinfo.Commit=$commit -X github.com/wanstu/mcp-center/internal/buildinfo.BuildTime=$buildTime"
 
-    Write-Host "Testing..."
+    Write-Host "Testing mcp-center..."
     go test ./... -count=1 -timeout 30s
-    if ($LASTEXITCODE -ne 0) { throw "go test failed" }
+    if ($LASTEXITCODE -ne 0) { throw "mcp-center go test failed" }
+
+    Write-Host "Testing mcp-center-core..."
+    Push-Location $coreRoot
+    try {
+        go test ./... -count=1 -timeout 30s
+        if ($LASTEXITCODE -ne 0) { throw "mcp-center-core go test failed" }
+    }
+    finally {
+        Pop-Location
+    }
 
     $releaseDir = Join-Path $OutputDir $Version
     if (Test-Path $releaseDir) { Remove-Item -Recurse -Force $releaseDir }
@@ -75,6 +85,14 @@ try {
         $env:GOOS = $oldGOOS
         $env:GOARCH = $oldGOARCH
         $env:CGO_ENABLED = $oldCGO
+    }
+
+    if ($env:OS -eq "Windows_NT") {
+        $smokeArch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "amd64" }
+        $smokeBinary = Join-Path $releaseDir "mcp-center-$Version-windows-$smokeArch.exe"
+        Write-Host "Running release smoke test with $smokeBinary"
+        & (Join-Path $PSScriptRoot "smoke-release.ps1") -BinaryPath $smokeBinary -ExpectedVersion $Version
+        if ($LASTEXITCODE -ne 0) { throw "Release smoke test failed" }
     }
 
     $checksums = Get-ChildItem $releaseDir -File |

@@ -66,6 +66,9 @@ type authorizeView struct {
 }
 
 func (a *App) handleAuthorizationServerMetadata(w http.ResponseWriter, _ *http.Request) {
+	if !a.requireOAuthEnabled(w) {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"issuer":                                         a.baseURL,
 		"authorization_endpoint":                         a.baseURL + "/oauth/authorize",
@@ -82,6 +85,9 @@ func (a *App) handleAuthorizationServerMetadata(w http.ResponseWriter, _ *http.R
 }
 
 func (a *App) handleProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
+	if !a.requireOAuthEnabled(w) {
+		return
+	}
 	resource := strings.TrimRight(a.baseURL, "/") + "/mcp"
 	suffix := strings.TrimPrefix(r.URL.Path, "/.well-known/oauth-protected-resource")
 	if strings.HasPrefix(suffix, "/mcp/") {
@@ -109,6 +115,9 @@ func (a *App) handleProtectedResourceMetadata(w http.ResponseWriter, r *http.Req
 }
 
 func (a *App) handleOAuthAuthorizeGet(w http.ResponseWriter, r *http.Request) {
+	if !a.requireOAuthEnabled(w) {
+		return
+	}
 	view, err := a.authorizeViewFromValues(r.URL.Query())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -133,6 +142,9 @@ func (a *App) handleOAuthAuthorizeGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleOAuthAuthorizePost(w http.ResponseWriter, r *http.Request) {
+	if !a.requireOAuthEnabled(w) {
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
@@ -193,6 +205,9 @@ func (a *App) handleOAuthAuthorizePost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleOAuthToken(w http.ResponseWriter, r *http.Request) {
+	if !a.requireOAuthEnabled(w) {
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "invalid form")
 		return
@@ -237,6 +252,9 @@ func (a *App) exchangeOAuthToken(values url.Values) (oauthcore.TokenSet, string,
 }
 
 func (a *App) handleOAuthRevoke(w http.ResponseWriter, r *http.Request) {
+	if !a.requireOAuthEnabled(w) {
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "invalid form")
 		return

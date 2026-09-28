@@ -204,7 +204,7 @@
           <div id="credential-empty" class="empty hidden">还没有 Access Credential。</div>
         </div>
         <article class="panel">
-          <div class="panel-head"><div><h2>OAuth Clients</h2><p>Authorization Code + PKCE S256。Client 只允许管理员显式创建，不开放动态注册。</p></div><div class="row"><button id="oauth-self-test" class="button">OAuth 自测</button><button id="add-oauth-client" class="button">创建 OAuth Client</button></div></div>
+          <div class="panel-head"><div><div class="row"><h2>OAuth Clients</h2><span id="oauth-service-status" class="status ok">已启用</span></div><p>Authorization Code + PKCE S256。Client 只允许管理员显式创建，不开放动态注册。</p></div><div class="row"><button id="oauth-self-test" class="button">OAuth 自测</button><button id="add-oauth-client" class="button">创建 OAuth Client</button></div></div>
           <div class="grid-2">
             <div>
               <h2>Authorization Server</h2>
@@ -255,7 +255,7 @@
           <div class="panel">
             <div class="panel-head"><div><h2>能力状态</h2><p>当前控制程序已启用的核心能力。</p></div></div>
             <div class="setting"><div><strong>版本</strong><span id="settings-version">读取中…</span></div><span class="status">Build</span></div>
-            <div class="setting"><div><strong>OAuth</strong><span>Authorization Code + PKCE</span></div><span class="status ok">已接入</span></div>
+            <div class="setting"><div><strong>OAuth</strong><span>Authorization Code + PKCE</span></div><span id="settings-oauth-status" class="status ok">已启用</span></div>
             <div class="setting"><div><strong>Bearer / Header / Query</strong><span>统一 Access Credential，可独立开关授权入口</span></div><span class="status ok">已接入</span></div>
             <div class="setting"><div><strong>调用审计</strong><span>JSONL 持久化，参数仅记录键名和类型</span></div><span class="status ok">已接入</span></div>
             <div class="setting"><div><strong>Runtime Session Manager</strong><span>连接复用、tools/list 缓存、刷新、断开、配置变更自动失效</span></div><span class="status ok">已接入</span></div>
@@ -270,16 +270,17 @@
         </div>
         <div class="panel">
           <div class="panel-head">
-            <div><h2>日志策略</h2><p>控制本地审计日志保留时间。</p></div>
+            <div><h2>服务策略</h2><p>控制 OAuth 服务和本地审计日志策略。</p></div>
           </div>
           <div class="form-grid">
+            <label class="channel-card span-2"><span><strong>OAuth 授权服务</strong><small>关闭后 Discovery、Authorize、Token、Revoke 与 OAuth 自测不可用；Static Bearer / Header / Query 不受影响。</small></span><input id="settings-oauth-enabled" type="checkbox" checked></label>
             <label class="field">审计日志保留天数
               <input id="settings-audit-retention" type="number" min="1" max="3650" value="30">
               <small>默认 30 天；保存后会立即删除超过保留期的日志。</small>
             </label>
           </div>
           <p id="settings-system-error" class="form-error hidden"></p>
-          <div class="row end"><button id="save-system-settings" class="button primary">保存日志策略</button></div>
+          <div class="row end"><button id="save-system-settings" class="button primary">保存服务策略</button></div>
         </div>
         <div class="panel">
           <div class="panel-head">

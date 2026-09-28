@@ -9,7 +9,8 @@ import (
 )
 
 type Values struct {
-	AuditRetentionDays int `json:"audit_retention_days"`
+	AuditRetentionDays int  `json:"audit_retention_days"`
+	OAuthDisabled      bool `json:"oauth_disabled,omitempty"`
 }
 
 type Store struct {

@@ -1,10 +1,30 @@
 package server
 
 import (
+	"errors"
 	"net/http"
-
-	settingsstore "github.com/wanstu/mcp-center/internal/settings"
 )
+
+func (a *App) oauthEnabled() (bool, error) {
+	values, err := a.settings.Get()
+	if err != nil {
+		return false, err
+	}
+	return !values.OAuthDisabled, nil
+}
+
+func (a *App) requireOAuthEnabled(w http.ResponseWriter) bool {
+	enabled, err := a.oauthEnabled()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return false
+	}
+	if !enabled {
+		writeError(w, http.StatusServiceUnavailable, errors.New("OAuth 已关闭"))
+		return false
+	}
+	return true
+}
 
 func (a *App) handleSettingsGet(w http.ResponseWriter, _ *http.Request) {
 	values, err := a.settings.Get()
@@ -16,12 +36,26 @@ func (a *App) handleSettingsGet(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (a *App) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
-	var input settingsstore.Values
+	var input struct {
+		AuditRetentionDays *int  `json:"audit_retention_days,omitempty"`
+		OAuthDisabled      *bool `json:"oauth_disabled,omitempty"`
+	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	values, err := a.settings.Update(input)
+	current, err := a.settings.Get()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	if input.AuditRetentionDays != nil {
+		current.AuditRetentionDays = *input.AuditRetentionDays
+	}
+	if input.OAuthDisabled != nil {
+		current.OAuthDisabled = *input.OAuthDisabled
+	}
+	values, err := a.settings.Update(current)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return

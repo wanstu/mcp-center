@@ -73,6 +73,9 @@ func oauthSelfTestSteps() []oauthSelfTestStep {
 }
 
 func (a *App) handleOAuthTestStart(w http.ResponseWriter, r *http.Request) {
+	if !a.requireOAuthEnabled(w) {
+		return
+	}
 	var input struct {
 		MCPRef string `json:"mcp_ref"`
 	}

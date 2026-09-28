@@ -109,6 +109,48 @@ func TestAccessCredentialAPIAndChannels(t *testing.T) {
 	}
 }
 
+func TestOAuthDisabledKeepsStaticBearerCredentialsWorking(t *testing.T) {
+	app := newTestApp(t)
+	session := bootstrapSession(t, app)
+	handler := app.Handler()
+
+	create := requestJSON(t, handler, http.MethodPost, "/api/access/credentials", map[string]any{
+		"name":         "static-bearer",
+		"enabled":      true,
+		"allow_bearer": true,
+		"scopes":       []string{"mcp:*"},
+	}, session)
+	if create.Code != http.StatusCreated {
+		t.Fatalf("create = %d %s", create.Code, create.Body.String())
+	}
+	var created accesscore.CreatedCredential
+	if err := json.Unmarshal(create.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+
+	settings := requestJSON(t, handler, http.MethodPut, "/api/settings", map[string]any{
+		"oauth_disabled": true,
+	}, session)
+	if settings.Code != http.StatusOK {
+		t.Fatalf("disable OAuth = %d %s", settings.Code, settings.Body.String())
+	}
+
+	metadata := requestJSON(t, handler, http.MethodGet, "/.well-known/oauth-authorization-server", nil)
+	if metadata.Code != http.StatusServiceUnavailable {
+		t.Fatalf("OAuth metadata while disabled = %d %s", metadata.Code, metadata.Body.String())
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp/example", nil)
+	req.Header.Set("Authorization", "Bearer "+created.Secret)
+	principal, err := app.authenticateMCPRequest(req, "example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if principal.Kind != "access_credential" || principal.AuthChannel != accesscore.ChannelBearer {
+		t.Fatalf("unexpected static bearer principal: %#v", principal)
+	}
+}
+
 func TestAccessCredentialAPIRejectsUnsupportedScopes(t *testing.T) {
 	app := newTestApp(t)
 	session := bootstrapSession(t, app)

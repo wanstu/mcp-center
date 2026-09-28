@@ -262,6 +262,13 @@
           </div>
         </div>
         <div class="panel">
+          <div class="panel-head"><div><h2>运行配置</h2><p>这些值来自当前进程启动参数；修改后需要重启 MCP Center。</p></div><span class="status warn">修改需重启</span></div>
+          <div class="setting"><div><strong>Listen Address</strong><span id="settings-listen-address">读取中…</span></div><code>--listen</code></div>
+          <div class="setting"><div><strong>External Base URL</strong><span id="settings-base-url">读取中…</span></div><code>--base-url</code></div>
+          <div class="setting"><div><strong>Data Directory</strong><span id="settings-data-dir">读取中…</span></div><code>--data-dir</code></div>
+          <div id="settings-base-url-warning" class="notice hidden">当前 Base URL 是 loopback 地址，只适合本机客户端；公网部署时请使用 HTTPS 域名并通过 <code>--base-url</code> 指定。</div>
+        </div>
+        <div class="panel">
           <div class="panel-head">
             <div><h2>日志策略</h2><p>控制本地审计日志保留时间。</p></div>
           </div>

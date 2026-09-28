@@ -30,7 +30,7 @@ async function mockApi(path,options){
   if(path==='/api/auth/login')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/auth/logout')return {ok:true};
   if(path==='/api/version'&&method==='GET')return {version:'dev',commit:'mock123456789',modified:false};
-  if(path==='/api/connection-info'&&method==='GET')return {base_url:location.origin,mcp_endpoint_template:location.origin+'/mcp/{id}',mcp_id_endpoint_template:location.origin+'/mcp/{id}',mcp_name_endpoint_template:location.origin+'/mcp/{name}',authorization_server_metadata:location.origin+'/.well-known/oauth-authorization-server',is_loopback:/^(localhost|127\.0\.0\.1|\[::1\])(?::|$)/.test(location.host)};
+  if(path==='/api/connection-info'&&method==='GET')return {base_url:location.origin,listen_address:location.host,data_dir:'mock://mcp-center',secure:location.protocol==='https:',restart_required_for:['listen_address','base_url','data_dir'],mcp_endpoint_template:location.origin+'/mcp/{id}',mcp_id_endpoint_template:location.origin+'/mcp/{id}',mcp_name_endpoint_template:location.origin+'/mcp/{name}',authorization_server_metadata:location.origin+'/.well-known/oauth-authorization-server',is_loopback:/^(localhost|127\.0\.0\.1|\[::1\])(?::|$)/.test(location.host)};
   if(path==='/api/account/password'&&method==='POST')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/settings'&&method==='GET')return {settings:mockData.systemSettings};
   if(path==='/api/settings'&&method==='PUT'){mockData.systemSettings=JSON.parse(options.body);return {settings:mockData.systemSettings}}
@@ -139,7 +139,7 @@ function switchPage(page){
   if(page==='access')Promise.all([loadAccess(),loadOAuth(),loadConnectionInfo()]).catch(error=>toast(error.message));
   if(page==='logs')loadAudit().catch(error=>toast(error.message));
   if(page==='dashboard')loadAuditSummary().catch(error=>toast(error.message));
-  if(page==='settings'){renderAccountSettings();Promise.all([loadVersion(),loadSystemSettings(),loadUpstreamSecrets()]).catch(error=>toast(error.message))}
+  if(page==='settings'){renderAccountSettings();Promise.all([loadVersion(),loadConnectionInfo(),loadSystemSettings(),loadUpstreamSecrets()]).catch(error=>toast(error.message))}
 }
 async function loadAuditSummary(){
   const result=await api('/api/audit/summary');
@@ -887,6 +887,10 @@ function renderConnectionInfo(){
   status.textContent=info.is_loopback?'仅本机':'外部地址';
   status.className='status '+(info.is_loopback?'warn':'ok');
   el('connection-loopback-warning').classList.toggle('hidden',!info.is_loopback);
+  if(el('settings-listen-address'))el('settings-listen-address').textContent=info.listen_address||'—';
+  if(el('settings-base-url'))el('settings-base-url').textContent=info.base_url||'—';
+  if(el('settings-data-dir'))el('settings-data-dir').textContent=info.data_dir||'—';
+  if(el('settings-base-url-warning'))el('settings-base-url-warning').classList.toggle('hidden',!info.is_loopback);
   const box=el('connection-endpoints');box.innerHTML='';
   for(const m of state.mcps){
     const nameURL=mcpExternalURL(m,'name'),idURL=mcpExternalURL(m,'id');

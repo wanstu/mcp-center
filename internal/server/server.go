@@ -42,7 +42,11 @@ type App struct {
 	settings        *settingsstore.Store
 	assets          fs.FS
 	baseURL         string
+	dataDir         string
 	secure          bool
+
+	runtimeInfoMu sync.RWMutex
+	listenAddr    string
 
 	proxyMu sync.Mutex
 	proxies map[string]http.Handler
@@ -111,7 +115,7 @@ func New(cfg Config) (*App, error) {
 	return &App{
 		core: coreService, access: accessService, account: accounts, oauth: oauthService, audit: auditLog,
 		upstreamSecrets: upstreamSecrets, settings: settingsService,
-		assets: cfg.Assets, baseURL: base, secure: strings.HasPrefix(base, "https://"),
+		assets: cfg.Assets, baseURL: base, dataDir: cfg.DataDir, secure: strings.HasPrefix(base, "https://"),
 		proxies:    map[string]http.Handler{},
 		oauthTests: map[string]*oauthSelfTest{},
 	}, nil
@@ -196,6 +200,10 @@ func (a *App) ListenAndServe(ctx context.Context, listen string) (*http.Server, 
 	if err != nil {
 		return nil, nil, err
 	}
+	a.runtimeInfoMu.Lock()
+	a.listenAddr = listener.Addr().String()
+	a.runtimeInfoMu.Unlock()
+
 	srv := &http.Server{
 		Handler:           a.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,

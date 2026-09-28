@@ -50,9 +50,7 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - 工具测试参数助手：从 inputSchema 自动生成最小 JSON 示例，并提供 Form / JSON 双模式
 - 工具测试状态按 MCP + Tool 保留参数、模式和最后一次运行结果，切换后可恢复
 
-开发中：
-
-- 更完整设置页面
+当前发布目标：`v0.1.0-rc.3`。
 
 ## 本地启动
 
@@ -78,7 +76,7 @@ go run ./cmd/mcp-center --version
 RC / Release 构建：
 
 ```powershell
-./scripts/build-release.ps1 -Version v0.1.0-rc.2
+./scripts/build-release.ps1 -Version v0.1.0-rc.3
 ```
 
 详见 `docs/RELEASE.md`。

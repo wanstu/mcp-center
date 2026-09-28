@@ -85,6 +85,10 @@ func (a *App) handleOAuthTestStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err)
 		return
 	}
+	if def.Disabled {
+		writeError(w, http.StatusConflict, errors.New("MCP 已禁用，无法执行 OAuth 自测"))
+		return
+	}
 
 	id, err := oauthSelfTestRandom("ot", 18)
 	if err != nil {

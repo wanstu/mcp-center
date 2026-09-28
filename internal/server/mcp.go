@@ -50,6 +50,35 @@ func (a *App) handleMCPUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"mcp": item})
 }
 
+func (a *App) handleMCPState(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var input struct {
+		Disabled bool `json:"disabled"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	item, err := a.core.SetDisabled(id, input.Disabled)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	a.invalidateProxy(id)
+	writeJSON(w, http.StatusOK, map[string]any{"mcp": item})
+}
+
+func (a *App) ensureMCPEnabled(id string) error {
+	item, err := a.core.Get(id)
+	if err != nil {
+		return err
+	}
+	if item.Disabled {
+		return errors.New("MCP 已禁用")
+	}
+	return nil
+}
+
 func (a *App) handleMCPDelete(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := a.core.Remove(id); err != nil {
@@ -61,6 +90,10 @@ func (a *App) handleMCPDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleMCPProbe(w http.ResponseWriter, r *http.Request) {
+	if err := a.ensureMCPEnabled(r.PathValue("id")); err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	status, err := a.core.Probe(ctx, r.PathValue("id"))
@@ -72,6 +105,10 @@ func (a *App) handleMCPProbe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleMCPTools(w http.ResponseWriter, r *http.Request) {
+	if err := a.ensureMCPEnabled(r.PathValue("id")); err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	tools, err := a.core.ListTools(ctx, r.PathValue("id"))
@@ -83,6 +120,10 @@ func (a *App) handleMCPTools(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleMCPCall(w http.ResponseWriter, r *http.Request) {
+	if err := a.ensureMCPEnabled(r.PathValue("id")); err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
 	var input struct {
 		Name      string         `json:"name"`
 		Arguments map[string]any `json:"arguments,omitempty"`
@@ -112,6 +153,10 @@ func (a *App) handleMCPProxy(w http.ResponseWriter, r *http.Request) {
 	def, err := a.core.GetByRef(ref)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	if def.Disabled {
+		writeError(w, http.StatusServiceUnavailable, errors.New("MCP 已禁用"))
 		return
 	}
 	principal, err := a.authenticateMCPRequest(r, ref)

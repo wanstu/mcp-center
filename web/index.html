@@ -109,6 +109,7 @@
               <option value="connected">已连接</option>
               <option value="disconnected">未连接</option>
               <option value="error">异常</option>
+              <option value="disabled">已禁用</option>
             </select>
           </div>
           <div id="mcp-table-wrap" class="table-wrap">
@@ -381,6 +382,7 @@
       <div class="form-grid">
         <label class="field">名称<input id="mcp-name" required></label>
         <label class="field">Transport<select id="mcp-transport"><option value="streamable-http">Streamable HTTP</option><option value="stdio">stdio</option></select></label>
+        <label class="check span-2"><input id="mcp-enabled" type="checkbox" checked> 启用服务</label>
         <label class="field span-2 http-only">Endpoint
           <input id="mcp-endpoint" placeholder="https://example.com/mcp">
           <small>可直接填写 URL，也可使用环境变量模板。</small>

@@ -139,6 +139,7 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("GET /api/mcps", a.requireAdmin(http.HandlerFunc(a.handleMCPList)))
 	mux.Handle("POST /api/mcps", a.requireAdmin(http.HandlerFunc(a.handleMCPAdd)))
 	mux.Handle("PUT /api/mcps/{id}", a.requireAdmin(http.HandlerFunc(a.handleMCPUpdate)))
+	mux.Handle("PUT /api/mcps/{id}/state", a.requireAdmin(http.HandlerFunc(a.handleMCPState)))
 	mux.Handle("DELETE /api/mcps/{id}", a.requireAdmin(http.HandlerFunc(a.handleMCPDelete)))
 	mux.Handle("POST /api/mcps/{id}/probe", a.requireAdmin(http.HandlerFunc(a.handleMCPProbe)))
 	mux.Handle("GET /api/mcps/{id}/tools", a.requireAdmin(http.HandlerFunc(a.handleMCPTools)))

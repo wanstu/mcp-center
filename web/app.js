@@ -75,6 +75,13 @@ async function mockApi(path,options){
   if(runtimePath&&method==='POST'){const id=runtimePath[1],action=runtimePath[2];if(action==='disconnect'){const status={mcp_id:id,state:'disconnected',tool_count:0};mockData.runtime[id]=status;return {status}}const tools=mockData.tools[id]||[];const status={mcp_id:id,state:'connected',tool_count:tools.length,connected_at:new Date().toISOString(),last_used_at:new Date().toISOString()};mockData.runtime[id]=status;return {status,tools}}
   if(path==='/api/mcps'&&method==='GET')return {mcps:mockData.mcps};
   if(path==='/api/mcps'&&method==='POST'){const cfg=JSON.parse(options.body);const m={id:'mcp_'+Date.now(),...cfg};mockData.mcps.push(m);return {mcp:m}}
+  const statePath=path.match(/^\/api\/mcps\/([^/]+)\/state$/);
+  if(statePath&&method==='PUT'){
+    const id=statePath[1],input=JSON.parse(options.body),i=mockData.mcps.findIndex(x=>x.id===id);
+    mockData.mcps[i]={...mockData.mcps[i],disabled:Boolean(input.disabled)};
+    delete mockData.runtime[id];
+    return {mcp:mockData.mcps[i]};
+  }
   const m=path.match(/^\/api\/mcps\/([^/]+)(?:\/(probe|tools|call))?$/);
   if(m){const id=m[1],action=m[2];
     if(method==='DELETE'){mockData.mcps=mockData.mcps.filter(x=>x.id!==id);return {ok:true}}
@@ -151,6 +158,7 @@ async function loadRuntimeStatuses(){
   renderMCPs();renderDashboard();
 }
 function mcpStatusKey(m){
+  if(m.disabled)return 'disabled';
   const health=state.health.get(m.id),runtime=state.runtime.get(m.id);
   if(runtime?.state==='connected'||health?.state==='healthy')return 'connected';
   if(runtime?.state==='error'||health?.state==='error')return 'error';
@@ -170,15 +178,18 @@ function renderMCPs(){
     let status='<span class="status">未连接</span>';
     if(statusKey==='connected')status='<span class="status ok">已连接</span>';
     else if(statusKey==='error')status='<span class="status bad">异常</span>';
-    const tools=state.tools.get(m.id)?.length??health?.tools?.length??runtime?.tool_count??'—';
+    else if(statusKey==='disabled')status='<span class="status warn">已禁用</span>';
+    const tools=m.disabled?'—':(state.tools.get(m.id)?.length??health?.tools?.length??runtime?.tool_count??'—');
     const where=m.transport==='stdio'?escapeHTML([m.executable,...(m.args||[])].join(' ')):escapeHTML(m.endpoint||'');
-    const disconnect=runtime?.state==='connected'?'<button class="button ghost small" data-op="disconnect">断开</button> ':'';
+    const runtimeActions=m.disabled?'':('<button class="button small" data-op="probe">刷新</button><button class="button small" data-op="test">测试</button>'+(runtime?.state==='connected'?'<button class="button ghost small" data-op="disconnect">断开</button> ':''));
+    const stateAction='<button class="button ghost small" data-op="state">'+(m.disabled?'启用':'禁用')+'</button>';
     const tr=document.createElement('tr');
-    tr.innerHTML='<td><strong>'+escapeHTML(m.name)+'</strong><br><small class="muted">'+escapeHTML(m.id)+'</small></td><td>'+escapeHTML(m.transport)+'</td><td>'+status+'</td><td>'+tools+'</td><td><span class="muted">'+where+'</span></td><td><div class="row"><button class="button small" data-op="probe">刷新</button><button class="button small" data-op="test">测试</button><button class="button ghost small" data-op="endpoint">复制接入地址</button>'+disconnect+'<button class="button ghost small" data-op="edit">编辑</button><button class="button ghost small" data-op="delete">删除</button></div></td>';
-    tr.querySelector('[data-op="probe"]').onclick=()=>probeMCP(m.id);
-    tr.querySelector('[data-op="test"]').onclick=()=>{switchPage('tools');el('tool-mcp').value=m.id;loadTools(m.id)};
+    tr.innerHTML='<td><strong>'+escapeHTML(m.name)+'</strong><br><small class="muted">'+escapeHTML(m.id)+'</small></td><td>'+escapeHTML(m.transport)+'</td><td>'+status+'</td><td>'+tools+'</td><td><span class="muted">'+where+'</span></td><td><div class="row">'+runtimeActions+'<button class="button ghost small" data-op="endpoint">复制接入地址</button>'+stateAction+'<button class="button ghost small" data-op="edit">编辑</button><button class="button ghost small" data-op="delete">删除</button></div></td>';
+    tr.querySelector('[data-op="probe"]')?.addEventListener('click',()=>probeMCP(m.id));
+    tr.querySelector('[data-op="test"]')?.addEventListener('click',()=>{switchPage('tools');el('tool-mcp').value=m.id;loadTools(m.id)});
     tr.querySelector('[data-op="endpoint"]').onclick=()=>copyMCPExternalURL(m,'name');
     tr.querySelector('[data-op="disconnect"]')?.addEventListener('click',()=>disconnectMCP(m.id));
+    tr.querySelector('[data-op="state"]').onclick=()=>toggleMCPDisabled(m);
     tr.querySelector('[data-op="edit"]').onclick=()=>openMCPDialog(m);
     tr.querySelector('[data-op="delete"]').onclick=()=>deleteMCP(m);
     body.appendChild(tr);
@@ -190,10 +201,10 @@ function renderMCPs(){
 }
 function renderDashboard(){
   el('metric-mcps').textContent=state.mcps.length;
-  const online=state.mcps.filter(m=>state.runtime.get(m.id)?.state==='connected'||state.health.get(m.id)?.state==='healthy').length;
+  const online=state.mcps.filter(m=>!m.disabled&&(state.runtime.get(m.id)?.state==='connected'||state.health.get(m.id)?.state==='healthy')).length;
   el('metric-online').textContent=online;
   let tools=0;
-  for(const m of state.mcps)tools+=state.tools.get(m.id)?.length??state.health.get(m.id)?.tools?.length??state.runtime.get(m.id)?.tool_count??0;
+  for(const m of state.mcps)if(!m.disabled)tools+=state.tools.get(m.id)?.length??state.health.get(m.id)?.tools?.length??state.runtime.get(m.id)?.tool_count??0;
   el('metric-tools').textContent=tools;
   el('metric-mcps-sub').textContent=state.mcps.length?'已加载配置':'尚未添加';
 
@@ -209,9 +220,9 @@ function renderDashboard(){
     for(const m of state.mcps.slice(0,6)){
       const row=document.createElement('div');row.className='service-item';
       const h=state.health.get(m.id),runtime=state.runtime.get(m.id);
-      let status='<span class="status">未连接</span>';
-      if(runtime?.state==='connected'||h?.state==='healthy')status='<span class="status ok">已连接</span>';
-      else if(runtime?.state==='error'||h?.state==='error')status='<span class="status bad">异常</span>';
+      let status=m.disabled?'<span class="status warn">已禁用</span>':'<span class="status">未连接</span>';
+      if(!m.disabled&&(runtime?.state==='connected'||h?.state==='healthy'))status='<span class="status ok">已连接</span>';
+      else if(!m.disabled&&(runtime?.state==='error'||h?.state==='error'))status='<span class="status bad">异常</span>';
       row.innerHTML='<div><strong>'+escapeHTML(m.name)+'</strong><small>'+escapeHTML(m.transport)+' · '+escapeHTML(m.endpoint||m.executable||'')+'</small></div>'+status;
       box.appendChild(row);
     }
@@ -273,6 +284,7 @@ function openMCPDialog(m=null){
   el('mcp-env').value=formatKVMap(m?.env_refs);
   el('mcp-auth').value=m?.auth_mode||'none';
   el('mcp-headers').value=formatKVMap(m?.header_refs);
+  el('mcp-enabled').checked=!Boolean(m?.disabled);
   clearError(el('mcp-form-error'));
   updateTransportFields();
   el('mcp-dialog').showModal();
@@ -294,6 +306,7 @@ async function saveMCP(event){
     name:el('mcp-name').value.trim(),
     transport,
     auth_mode:transport==='stdio'?'none':el('mcp-auth').value,
+    disabled:!el('mcp-enabled').checked,
     default_include_in_environment:Boolean(state.editingMCP?.default_include_in_environment),
     health_policy:state.editingMCP?.health_policy||{health_check_enabled:false,auto_reconnect:false}
   };
@@ -317,6 +330,15 @@ async function saveMCP(event){
     await loadMCPs();
     toast(id?'MCP 已更新':'MCP 已添加，可点击“刷新”验证连接');
   }catch(error){showError(el('mcp-form-error'),error)}
+}
+async function toggleMCPDisabled(m){
+  const nextDisabled=!Boolean(m.disabled);
+  try{
+    await api('/api/mcps/'+encodeURIComponent(m.id)+'/state',{method:'PUT',body:JSON.stringify({disabled:nextDisabled})});
+    state.health.delete(m.id);state.tools.delete(m.id);state.runtime.delete(m.id);
+    await loadMCPs();
+    toast(nextDisabled?'MCP 已禁用':'MCP 已启用');
+  }catch(error){toast((nextDisabled?'禁用':'启用')+'失败：'+error.message)}
 }
 async function deleteMCP(m){if(!confirm('删除 MCP “'+m.name+'”？'))return;try{await api('/api/mcps/'+encodeURIComponent(m.id),{method:'DELETE'});state.health.delete(m.id);state.tools.delete(m.id);await loadMCPs();toast('已删除')}catch(error){toast(error.message)}}
 async function disconnectMCP(id){
@@ -387,10 +409,10 @@ function downloadBlob(blob,filename){const url=URL.createObjectURL(blob),a=docum
 
 
 function refreshToolMCPSelect(){
-  const select=el('tool-mcp'),current=select.value;select.innerHTML='';
-  for(const m of state.mcps){const o=document.createElement('option');o.value=m.id;o.textContent=m.name;select.appendChild(o)}
-  if(current&&state.mcps.some(m=>m.id===current))select.value=current;
-  if(select.value&&state.page==='tools')loadTools(select.value);else if(!select.value){el('tool-list').innerHTML='<div class="empty">暂无 MCP</div>';selectTool(null)}
+  const select=el('tool-mcp'),current=select.value,enabled=state.mcps.filter(m=>!m.disabled);select.innerHTML='';
+  for(const m of enabled){const o=document.createElement('option');o.value=m.id;o.textContent=m.name;select.appendChild(o)}
+  if(current&&enabled.some(m=>m.id===current))select.value=current;
+  if(select.value&&state.page==='tools')loadTools(select.value);else if(!select.value){el('tool-list').innerHTML='<div class="empty">暂无已启用 MCP</div>';selectTool(null)}
 }
 async function loadTools(id){
   try{const result=await api('/api/mcps/'+encodeURIComponent(id)+'/tools');state.tools.set(id,result.tools||[]);renderToolList(result.tools||[]);await loadRuntimeStatuses()}
@@ -776,10 +798,11 @@ function openOAuthSelfTestDialog(){
   stopOAuthSelfTestPolling();
   state.oauthTestID='';state.oauthTestStatus='';state.oauthTestAuthorizeURL='';
   const select=el('oauth-test-mcp');select.innerHTML='';
-  for(const m of state.mcps){
+  const enabled=state.mcps.filter(m=>!m.disabled);
+  for(const m of enabled){
     const option=document.createElement('option');option.value=m.name;option.textContent=m.name+' · '+m.transport;select.appendChild(option);
   }
-  const empty=state.mcps.length===0;
+  const empty=enabled.length===0;
   el('oauth-test-start').disabled=empty;
   el('oauth-test-start-actions').classList.remove('hidden');
   el('oauth-test-progress').classList.add('hidden');
@@ -868,7 +891,7 @@ function renderConnectionInfo(){
   for(const m of state.mcps){
     const nameURL=mcpExternalURL(m,'name'),idURL=mcpExternalURL(m,'id');
     const row=document.createElement('div');row.className='connection-endpoint';
-    row.innerHTML='<div class="connection-endpoint-main"><strong>'+escapeHTML(m.name)+'</strong><small>MCP ID: '+escapeHTML(m.id)+'</small><div class="connection-address"><span>Name 地址</span><code>'+escapeHTML(nameURL)+'</code><button class="button ghost small" type="button" data-copy-name>复制</button></div><div class="connection-address"><span>ID 地址</span><code>'+escapeHTML(idURL)+'</code><button class="button ghost small" type="button" data-copy-id>复制</button></div></div>';
+    row.innerHTML='<div class="connection-endpoint-main"><div class="row"><strong>'+escapeHTML(m.name)+'</strong>'+(m.disabled?'<span class="status warn">已禁用</span>':'<span class="status ok">已启用</span>')+'</div><small>MCP ID: '+escapeHTML(m.id)+(m.disabled?' · 当前地址不可调用':'')+'</small><div class="connection-address"><span>Name 地址</span><code>'+escapeHTML(nameURL)+'</code><button class="button ghost small" type="button" data-copy-name>复制</button></div><div class="connection-address"><span>ID 地址</span><code>'+escapeHTML(idURL)+'</code><button class="button ghost small" type="button" data-copy-id>复制</button></div></div>';
     row.querySelector('[data-copy-name]').onclick=()=>copyMCPExternalURL(m,'name');
     row.querySelector('[data-copy-id]').onclick=()=>copyMCPExternalURL(m,'id');
     box.appendChild(row);

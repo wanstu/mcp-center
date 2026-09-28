@@ -86,8 +86,13 @@ func (a *App) handleProtectedResourceMetadata(w http.ResponseWriter, r *http.Req
 	suffix := strings.TrimPrefix(r.URL.Path, "/.well-known/oauth-protected-resource")
 	if strings.HasPrefix(suffix, "/mcp/") {
 		ref := strings.TrimPrefix(suffix, "/mcp/")
-		if _, err := a.core.GetByRef(ref); err != nil {
+		def, err := a.core.GetByRef(ref)
+		if err != nil {
 			writeError(w, http.StatusNotFound, err)
+			return
+		}
+		if def.Disabled {
+			writeError(w, http.StatusServiceUnavailable, errors.New("MCP 已禁用"))
 			return
 		}
 		resource = a.mcpResourceURL(ref)
@@ -303,8 +308,8 @@ func (a *App) isLocalMCPResource(resource string) bool {
 	if ref == "" {
 		return false
 	}
-	_, err = a.core.GetByRef(ref)
-	return err == nil
+	def, err := a.core.GetByRef(ref)
+	return err == nil && !def.Disabled
 }
 
 func (v authorizeView) query() url.Values {

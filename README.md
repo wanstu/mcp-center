@@ -42,7 +42,8 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - 上游密钥使用本地随机主密钥 + AES-GCM 加密保存；列表和 API 不回显明文
 - 上游密钥替换 / 删除会断开现有 MCP Session，下次连接使用最新值
 - 工作台 24h 调用量与最近错误汇总
-- MCP 服务状态筛选：全部 / 已连接 / 未连接 / 异常
+- MCP 服务启用 / 禁用：保留配置但可临时下线；禁用后工具测试、Runtime、OAuth 与外部代理统一拒绝访问
+- MCP 服务状态筛选：全部 / 已连接 / 未连接 / 异常 / 已禁用
 - 审计日志保留策略：默认 30 天，可在设置页修改；保存后立即清理过期日志
 - 外部 MCP 接入地址总览：同一 MCP 同时支持 `<base-url>/mcp/{name}` 与 `<base-url>/mcp/{id}`；Name 地址易读，ID 地址稳定，均支持 OAuth / Static Credential
 - 工具测试参数助手：从 inputSchema 自动生成最小 JSON 示例，并提供 Form / JSON 双模式

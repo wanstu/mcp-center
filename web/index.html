@@ -203,7 +203,7 @@
           <div id="credential-empty" class="empty hidden">还没有 Access Credential。</div>
         </div>
         <article class="panel">
-          <div class="panel-head"><div><h2>OAuth Clients</h2><p>Authorization Code + PKCE S256。Client 只允许管理员显式创建，不开放动态注册。</p></div><button id="add-oauth-client" class="button">创建 OAuth Client</button></div>
+          <div class="panel-head"><div><h2>OAuth Clients</h2><p>Authorization Code + PKCE S256。Client 只允许管理员显式创建，不开放动态注册。</p></div><div class="row"><button id="oauth-self-test" class="button">OAuth 自测</button><button id="add-oauth-client" class="button">创建 OAuth Client</button></div></div>
           <div class="grid-2">
             <div>
               <h2>Authorization Server</h2>
@@ -302,6 +302,21 @@
       <p id="upstream-secret-error" class="form-error hidden"></p>
       <div class="dialog-actions"><button type="button" class="button" data-action="close-upstream-secret-dialog">取消</button><button type="submit" class="button primary">保存</button></div>
     </form>
+  </dialog>
+
+  <dialog id="oauth-test-dialog" class="dialog oauth-test-dialog">
+    <div class="dialog-head"><div><h2>OAuth 端到端自测</h2><p>使用临时 OAuth Client 测试真实授权、Token、MCP 访问、Refresh 与 Revoke。</p></div><button type="button" class="icon-button" data-action="close-oauth-test-dialog">×</button></div>
+    <div class="form-grid">
+      <label class="field span-2">测试 MCP<select id="oauth-test-mcp"></select><small>自测只执行 initialize / tools/list，不会自动调用业务 Tool。</small></label>
+    </div>
+    <div class="notice">点击开始后会打开真实 OAuth 授权页面。允许访问后回到这里，测试状态会自动刷新。</div>
+    <div id="oauth-test-start-actions" class="dialog-actions"><button type="button" class="button" data-action="close-oauth-test-dialog">取消</button><button id="oauth-test-start" type="button" class="button primary">开始授权测试</button></div>
+    <div id="oauth-test-progress" class="hidden">
+      <div class="oauth-test-summary"><div><strong id="oauth-test-resource">—</strong><span id="oauth-test-status" class="status">等待开始</span></div><small id="oauth-test-message" class="muted">尚未开始测试</small></div>
+      <div id="oauth-test-steps" class="oauth-test-steps"></div>
+      <p id="oauth-test-error" class="form-error hidden"></p>
+      <div class="dialog-actions"><button id="oauth-test-open-authorize" type="button" class="button hidden">打开授权页</button><button type="button" class="button primary" data-action="close-oauth-test-dialog">关闭</button></div>
+    </div>
   </dialog>
 
   <dialog id="oauth-client-dialog" class="dialog">

@@ -46,6 +46,9 @@ type App struct {
 
 	proxyMu sync.Mutex
 	proxies map[string]http.Handler
+
+	oauthTestMu sync.Mutex
+	oauthTests  map[string]*oauthSelfTest
 }
 
 func New(cfg Config) (*App, error) {
@@ -109,7 +112,8 @@ func New(cfg Config) (*App, error) {
 		core: coreService, access: accessService, account: accounts, oauth: oauthService, audit: auditLog,
 		upstreamSecrets: upstreamSecrets, settings: settingsService,
 		assets: cfg.Assets, baseURL: base, secure: strings.HasPrefix(base, "https://"),
-		proxies: map[string]http.Handler{},
+		proxies:    map[string]http.Handler{},
+		oauthTests: map[string]*oauthSelfTest{},
 	}, nil
 }
 
@@ -164,6 +168,9 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("POST /api/oauth/clients", a.requireAdmin(http.HandlerFunc(a.handleOAuthClientCreate)))
 	mux.Handle("PUT /api/oauth/clients/{id}", a.requireAdmin(http.HandlerFunc(a.handleOAuthClientUpdate)))
 	mux.Handle("DELETE /api/oauth/clients/{id}", a.requireAdmin(http.HandlerFunc(a.handleOAuthClientDelete)))
+	mux.Handle("POST /api/oauth/tests", a.requireAdmin(http.HandlerFunc(a.handleOAuthTestStart)))
+	mux.Handle("GET /api/oauth/tests/{id}", a.requireAdmin(http.HandlerFunc(a.handleOAuthTestStatus)))
+	mux.Handle("DELETE /api/oauth/tests/{id}", a.requireAdmin(http.HandlerFunc(a.handleOAuthTestCancel)))
 
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", a.handleAuthorizationServerMetadata)
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource", a.handleProtectedResourceMetadata)
@@ -172,6 +179,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("POST /oauth/authorize", a.handleOAuthAuthorizePost)
 	mux.HandleFunc("POST /oauth/token", a.handleOAuthToken)
 	mux.HandleFunc("POST /oauth/revoke", a.handleOAuthRevoke)
+	mux.HandleFunc("GET /oauth/test/callback", a.handleOAuthTestCallback)
 
 	mux.HandleFunc("/mcp/{id}", a.handleMCPProxy)
 	mux.HandleFunc("/mcp/{id}/", a.handleMCPProxy)

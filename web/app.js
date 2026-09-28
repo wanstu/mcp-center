@@ -1,8 +1,9 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,selectedToolMCPID:'',toolParamMode:'form',toolHistory:new Map(),connectionInfo:null,editingMCP:null,accessSettings:null,systemSettings:null,credentials:[],oauthClients:[],upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,selectedToolMCPID:'',toolParamMode:'form',toolHistory:new Map(),connectionInfo:null,editingMCP:null,accessSettings:null,systemSettings:null,credentials:[],oauthClients:[],oauthTestID:'',oauthTestStatus:'',oauthTestAuthorizeURL:'',upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
 const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
+let oauthTestPollTimer=null;
 
 function toast(message){const node=el('toast');node.textContent=message;node.classList.add('show');clearTimeout(window.__toastTimer);window.__toastTimer=setTimeout(()=>node.classList.remove('show'),2200)}
 function showError(node,error){node.textContent=String(error?.message||error);node.classList.remove('hidden')}
@@ -723,6 +724,110 @@ async function deleteOAuthClient(item){
   if(!confirm('删除 OAuth Client “'+(item.client_name||item.client_id)+'”？已有授权码和 Token 会同时失效。'))return;
   try{await api('/api/oauth/clients/'+encodeURIComponent(item.client_id),{method:'DELETE'});await loadOAuth();toast('OAuth Client 已删除，旧授权已撤销')}catch(error){toast(error.message)}
 }
+function stopOAuthSelfTestPolling(){
+  if(oauthTestPollTimer){clearInterval(oauthTestPollTimer);oauthTestPollTimer=null}
+}
+function oauthTestStatusLabel(status){
+  if(status==='passed')return ['通过','ok'];
+  if(status==='failed')return ['失败','bad'];
+  if(status==='running')return ['测试中','warn'];
+  if(status==='waiting_authorization')return ['等待授权','warn'];
+  return ['等待开始',''];
+}
+function renderOAuthSelfTest(test){
+  if(!test)return;
+  state.oauthTestStatus=test.status||'';
+  el('oauth-test-resource').textContent=test.resource||'—';
+  const [label,klass]=oauthTestStatusLabel(test.status);
+  const badge=el('oauth-test-status');badge.textContent=label;badge.className='status '+klass;
+  el('oauth-test-message').textContent=test.status==='passed'
+    ?('OAuth 端到端自测通过'+(test.tool_count!==undefined?'，发现 '+test.tool_count+' 个工具':''))
+    :(test.status==='failed'?'测试未通过':'请在授权窗口中继续操作');
+  const box=el('oauth-test-steps');box.innerHTML='';
+  for(const step of (test.steps||[])){
+    const row=document.createElement('div');row.className='oauth-test-step';
+    const [stepLabel,stepClass]=step.status==='passed'?['通过','ok']:step.status==='failed'?['失败','bad']:(step.status==='running'||step.status==='waiting')?['进行中','warn']:['等待',''];
+    row.innerHTML='<strong>'+escapeHTML(step.label||step.key||'')+'</strong><span class="status '+stepClass+'">'+stepLabel+'</span><small>'+escapeHTML(step.detail||'')+'</small>';
+    box.appendChild(row);
+  }
+  clearError(el('oauth-test-error'));
+  if(test.error)showError(el('oauth-test-error'),test.error);
+  if(test.status==='passed'||test.status==='failed'){
+    stopOAuthSelfTestPolling();
+    el('oauth-test-open-authorize').classList.add('hidden');
+  }
+}
+async function pollOAuthSelfTest(){
+  if(!state.oauthTestID)return;
+  try{
+    const result=await api('/api/oauth/tests/'+encodeURIComponent(state.oauthTestID));
+    renderOAuthSelfTest(result.test);
+  }catch(error){
+    stopOAuthSelfTestPolling();
+    showError(el('oauth-test-error'),error);
+  }
+}
+function startOAuthSelfTestPolling(){
+  stopOAuthSelfTestPolling();
+  pollOAuthSelfTest();
+  oauthTestPollTimer=setInterval(pollOAuthSelfTest,900);
+}
+function openOAuthSelfTestDialog(){
+  stopOAuthSelfTestPolling();
+  state.oauthTestID='';state.oauthTestStatus='';state.oauthTestAuthorizeURL='';
+  const select=el('oauth-test-mcp');select.innerHTML='';
+  for(const m of state.mcps){
+    const option=document.createElement('option');option.value=m.name;option.textContent=m.name+' · '+m.transport;select.appendChild(option);
+  }
+  const empty=state.mcps.length===0;
+  el('oauth-test-start').disabled=empty;
+  el('oauth-test-start-actions').classList.remove('hidden');
+  el('oauth-test-progress').classList.add('hidden');
+  el('oauth-test-open-authorize').classList.add('hidden');
+  clearError(el('oauth-test-error'));
+  el('oauth-test-dialog').showModal();
+}
+async function startOAuthSelfTest(){
+  const mcpRef=el('oauth-test-mcp').value;
+  if(!mcpRef){toast('请先添加一个 MCP');return}
+  const popup=window.open('about:blank','mcp-center-oauth-self-test','width=720,height=760');
+  if(popup){
+    try{popup.document.write('<!doctype html><title>OAuth 自测</title><p style="font-family:sans-serif;padding:24px">正在准备 OAuth 授权…</p>')}catch{}
+  }
+  el('oauth-test-start').disabled=true;
+  try{
+    const result=await api('/api/oauth/tests',{method:'POST',body:JSON.stringify({mcp_ref:mcpRef})});
+    state.oauthTestID=result.test.id;
+    state.oauthTestStatus=result.test.status;
+    state.oauthTestAuthorizeURL=result.authorize_url;
+    el('oauth-test-start-actions').classList.add('hidden');
+    el('oauth-test-progress').classList.remove('hidden');
+    renderOAuthSelfTest(result.test);
+    if(popup)popup.location=result.authorize_url;
+    else{
+      el('oauth-test-open-authorize').classList.remove('hidden');
+      showError(el('oauth-test-error'),'浏览器拦截了授权窗口，请点击“打开授权页”。');
+    }
+    startOAuthSelfTestPolling();
+  }catch(error){
+    if(popup&&!popup.closed)popup.close();
+    showError(el('oauth-test-error'),error);
+    el('oauth-test-start').disabled=false;
+  }
+}
+function reopenOAuthSelfTestAuthorize(){
+  if(!state.oauthTestAuthorizeURL)return;
+  const opened=window.open(state.oauthTestAuthorizeURL,'mcp-center-oauth-self-test','width=720,height=760');
+  if(!opened){showError(el('oauth-test-error'),'浏览器仍然拦截弹窗，请允许此站点打开弹窗。')}
+}
+async function closeOAuthSelfTestDialog(){
+  stopOAuthSelfTestPolling();
+  if(state.oauthTestID&&state.oauthTestStatus!=='passed'&&state.oauthTestStatus!=='failed'){
+    try{await api('/api/oauth/tests/'+encodeURIComponent(state.oauthTestID),{method:'DELETE'})}catch{}
+  }
+  state.oauthTestID='';state.oauthTestStatus='';state.oauthTestAuthorizeURL='';
+  el('oauth-test-dialog').close();
+}
 async function copyTextValue(value,successMessage='已复制'){
   try{
     await navigator.clipboard.writeText(value);
@@ -962,6 +1067,7 @@ document.addEventListener('click',event=>{
   if(event.target.closest('[data-action="close-credential-dialog"]'))el('credential-dialog').close();
   if(event.target.closest('[data-action="close-import-dialog"]'))el('import-dialog').close();
   if(event.target.closest('[data-action="close-oauth-client-dialog"]'))el('oauth-client-dialog').close();
+  if(event.target.closest('[data-action="close-oauth-test-dialog"]'))closeOAuthSelfTestDialog();
   if(event.target.closest('[data-action="close-upstream-secret-dialog"]'))el('upstream-secret-dialog').close();
 });
 el('auth-form').addEventListener('submit',submitAuth);
@@ -993,6 +1099,9 @@ el('tool-use-example').onclick=applyToolExample;
 el('tool-call').onclick=callTool;
 el('copy-base-url').onclick=()=>state.connectionInfo?.base_url&&copyTextValue(state.connectionInfo.base_url,'Base URL 已复制');
 el('add-credential').onclick=()=>openCredentialDialog();
+el('oauth-self-test').onclick=openOAuthSelfTestDialog;
+el('oauth-test-start').onclick=startOAuthSelfTest;
+el('oauth-test-open-authorize').onclick=reopenOAuthSelfTestAuthorize;
 el('add-oauth-client').onclick=()=>openOAuthClientDialog();
 el('add-upstream-secret').onclick=()=>openUpstreamSecretDialog();
 el('oauth-client-form').addEventListener('submit',saveOAuthClient);

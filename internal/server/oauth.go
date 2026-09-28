@@ -194,36 +194,41 @@ func (a *App) handleOAuthToken(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	clientID := strings.TrimSpace(r.PostForm.Get("client_id"))
-	if clientID == "" {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "client_id is required")
-		return
-	}
-
-	var (
-		set oauthcore.TokenSet
-		err error
-	)
-	switch r.PostForm.Get("grant_type") {
-	case "authorization_code":
-		set, err = a.oauth.ExchangeCode(
-			clientID,
-			r.PostForm.Get("code"),
-			r.PostForm.Get("redirect_uri"),
-			r.PostForm.Get("resource"),
-			r.PostForm.Get("code_verifier"),
-		)
-	case "refresh_token":
-		set, err = a.oauth.Refresh(clientID, r.PostForm.Get("refresh_token"))
-	default:
-		writeOAuthError(w, http.StatusBadRequest, "unsupported_grant_type", "unsupported grant_type")
-		return
-	}
+	set, code, err := a.exchangeOAuthToken(r.PostForm)
 	if err != nil {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_grant", err.Error())
+		writeOAuthError(w, http.StatusBadRequest, code, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, set)
+}
+
+func (a *App) exchangeOAuthToken(values url.Values) (oauthcore.TokenSet, string, error) {
+	clientID := strings.TrimSpace(values.Get("client_id"))
+	if clientID == "" {
+		return oauthcore.TokenSet{}, "invalid_request", errors.New("client_id is required")
+	}
+	switch values.Get("grant_type") {
+	case "authorization_code":
+		set, err := a.oauth.ExchangeCode(
+			clientID,
+			values.Get("code"),
+			values.Get("redirect_uri"),
+			values.Get("resource"),
+			values.Get("code_verifier"),
+		)
+		if err != nil {
+			return oauthcore.TokenSet{}, "invalid_grant", err
+		}
+		return set, "", nil
+	case "refresh_token":
+		set, err := a.oauth.Refresh(clientID, values.Get("refresh_token"))
+		if err != nil {
+			return oauthcore.TokenSet{}, "invalid_grant", err
+		}
+		return set, "", nil
+	default:
+		return oauthcore.TokenSet{}, "unsupported_grant_type", errors.New("unsupported grant_type")
+	}
 }
 
 func (a *App) handleOAuthRevoke(w http.ResponseWriter, r *http.Request) {
@@ -233,17 +238,20 @@ func (a *App) handleOAuthRevoke(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
-	clientID := strings.TrimSpace(r.PostForm.Get("client_id"))
-	token := strings.TrimSpace(r.PostForm.Get("token"))
-	if clientID == "" || token == "" {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "client_id and token are required")
-		return
-	}
-	if err := a.oauth.RevokeToken(clientID, token); err != nil {
+	if err := a.revokeOAuthToken(r.PostForm); err != nil {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func (a *App) revokeOAuthToken(values url.Values) error {
+	clientID := strings.TrimSpace(values.Get("client_id"))
+	token := strings.TrimSpace(values.Get("token"))
+	if clientID == "" || token == "" {
+		return errors.New("client_id and token are required")
+	}
+	return a.oauth.RevokeToken(clientID, token)
 }
 
 func (a *App) authorizeViewFromValues(values url.Values) (authorizeView, error) {

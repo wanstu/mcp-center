@@ -36,6 +36,7 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - 管理员账号设置与修改密码；改密后旧 Session 全部失效并自动换发当前 Session
 - OAuth Client 管理：管理员显式创建 / 编辑 / 删除，Public Client + PKCE
 - OAuth Client 修改 / 删除会撤销已有授权码与 Token；不开放动态客户端注册
+- OAuth 端到端自测：临时 Client + PKCE → 浏览器授权 → Token → MCP tools/list → Refresh → Revoke → 自动清理
 - OAuth Token 主动撤销：`/oauth/revoke`，Access / Refresh Grant 一并失效
 - 上游密钥变量：供 MCP Header / stdio Env 中的 `${NAME}` 引用
 - 上游密钥使用本地随机主密钥 + AES-GCM 加密保存；列表和 API 不回显明文

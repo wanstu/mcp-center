@@ -32,7 +32,7 @@ dist/<version>/
 
 每个构建会注入 Version、Git commit、UTC build time，并生成 `SHA256SUMS.txt` 与 `release-manifest.json`。Manifest 会同时记录 `mcp-center`、`mcp-center-core`、`wails-desktop-kit` 三个源码 commit；发布脚本要求这三个仓库都处于 clean 状态。
 
-Windows 发布机还会自动运行 `scripts/smoke-release.ps1`，使用最终构建出的 Windows 二进制分别连接真实 HTTP 与 stdio 测试 MCP，完成 `tools/list` 和 `tools/call` 后才允许发布流程继续。
+Windows 发布机还会自动运行 `scripts/smoke-release.ps1`，使用最终构建出的 Windows 二进制分别连接真实 HTTP 与 stdio 测试 MCP，完成 `tools/list` 和 `tools/call`；同时执行 OAuth Authorization Code + PKCE、MCP Bearer 访问、Refresh 与 Revoke 自测。全部通过后才允许发布流程继续。
 
 ## 验证
 

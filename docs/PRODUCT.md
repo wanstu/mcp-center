@@ -102,6 +102,8 @@ MCP Center 是 `mcp-center-core` 的独立控制面板和服务宿主。
 
 首版 OAuth Client 由管理员显式创建，不做动态客户端注册。
 
+控制台提供 OAuth 端到端自测：选择一个 MCP 后使用临时 Public Client 完成真实 Authorization Code + PKCE、Token Exchange、MCP initialize / tools/list、Refresh Token 轮换和 Revoke 验证。为避免误操作真实业务 MCP，产品自测不自动执行 tools/call；发布 smoke 使用专用测试 MCP 继续覆盖 tools/call。
+
 ### 调用日志
 
 结构化记录：

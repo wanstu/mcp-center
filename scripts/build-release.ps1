@@ -12,7 +12,6 @@ if ($Version -notmatch '^v\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $coreRoot = Resolve-Path (Join-Path $repoRoot "..\mcp-center-core")
-$kitRoot = Resolve-Path (Join-Path $repoRoot "..\wails-desktop-kit")
 
 function Assert-CleanGitTree([string]$Path, [string]$Name) {
     $status = git -C $Path status --porcelain
@@ -30,11 +29,13 @@ Push-Location $repoRoot
 try {
     Assert-CleanGitTree $repoRoot "mcp-center"
     Assert-CleanGitTree $coreRoot "mcp-center-core"
-    Assert-CleanGitTree $kitRoot "wails-desktop-kit"
 
     $commit = Get-Commit $repoRoot "mcp-center"
     $coreCommit = Get-Commit $coreRoot "mcp-center-core"
-    $kitCommit = Get-Commit $kitRoot "wails-desktop-kit"
+    $kitModule = go list -m -json github.com/wanstu/wails-desktop-kit | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or -not $kitModule.Version) {
+        throw "Cannot resolve wails-desktop-kit module version"
+    }
 
     $buildTime = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
     $ldflags = "-s -w -X github.com/wanstu/mcp-center/internal/buildinfo.Version=$Version -X github.com/wanstu/mcp-center/internal/buildinfo.Commit=$commit -X github.com/wanstu/mcp-center/internal/buildinfo.BuildTime=$buildTime"
@@ -95,6 +96,12 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Release smoke test failed" }
     }
 
+    $sourceBundleName = "mcp-center-$Version-source.zip"
+    $sourceBundlePath = [System.IO.Path]::GetFullPath((Join-Path $repoRoot (Join-Path $releaseDir $sourceBundleName)))
+    Write-Host "Building self-contained source bundle..."
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-source-bundle.ps1") -Version $Version -OutputPath $sourceBundlePath
+    if ($LASTEXITCODE -ne 0) { throw "Source bundle build failed" }
+
     $checksums = Get-ChildItem $releaseDir -File |
         Sort-Object Name |
         ForEach-Object {
@@ -110,7 +117,12 @@ try {
         source_commits = [ordered]@{
             mcp_center = $commit
             mcp_center_core = $coreCommit
-            wails_desktop_kit = $kitCommit
+        }
+        module_dependencies = [ordered]@{
+            wails_desktop_kit = [ordered]@{
+                version = $kitModule.Version
+                sum = $kitModule.Sum
+            }
         }
         artifacts = @(
             Get-ChildItem $releaseDir -File |

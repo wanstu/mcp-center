@@ -56,65 +56,6 @@ function Invoke-CenterJson {
     return Invoke-RestMethod @args
 }
 
-function ConvertFrom-QueryString([string]$Query) {
-    $result = @{}
-    foreach ($pair in $Query.TrimStart('?').Split('&', [System.StringSplitOptions]::RemoveEmptyEntries)) {
-        $parts = $pair.Split('=', 2)
-        $key = [System.Net.WebUtility]::UrlDecode($parts[0])
-        $value = if ($parts.Count -gt 1) { [System.Net.WebUtility]::UrlDecode($parts[1]) } else { "" }
-        $result[$key] = $value
-    }
-    return $result
-}
-
-function Assert-OAuthSelfTest {
-    param(
-        [string]$BaseUrl,
-        [string]$McpRef
-    )
-
-    Write-Host "Testing OAuth authorization + PKCE + refresh + revoke..."
-    $started = Invoke-CenterJson -Method Post -Uri "$BaseUrl/api/oauth/tests" -Session $script:CenterSession -Body @{
-        mcp_ref = $McpRef
-    }
-    if (-not $started.test.id -or -not $started.authorize_url) {
-        throw "OAuth self-test did not return test id and authorize URL"
-    }
-
-    $authorizeUri = [System.Uri]$started.authorize_url
-    $authorizePage = Invoke-WebRequest -UseBasicParsing -Method Get -Uri $authorizeUri.AbsoluteUri -WebSession $script:CenterSession -ErrorAction Stop
-    if ($authorizePage.StatusCode -ne 200 -or $authorizePage.Content -notlike "*授权 MCP 客户端*") {
-        throw "OAuth authorize page did not render consent UI"
-    }
-
-    $form = ConvertFrom-QueryString $authorizeUri.Query
-    $form["decision"] = "approve"
-    $callback = Invoke-WebRequest -UseBasicParsing -Method Post -Uri "$BaseUrl/oauth/authorize" -WebSession $script:CenterSession -Body $form -ContentType "application/x-www-form-urlencoded" -ErrorAction Stop
-    if ($callback.StatusCode -ne 200 -or $callback.Content -notlike "*OAuth 自测通过*") {
-        throw "OAuth authorization callback did not complete successfully"
-    }
-
-    $deadline = [DateTime]::UtcNow.AddSeconds(30)
-    do {
-        $status = Invoke-CenterJson -Method Get -Uri "$BaseUrl/api/oauth/tests/$($started.test.id)" -Session $script:CenterSession
-        if ($status.test.status -eq "passed") {
-            foreach ($step in @($status.test.steps)) {
-                if ($step.status -ne "passed") {
-                    throw "OAuth self-test step '$($step.key)' was not passed: $($step.status) $($step.detail)"
-                }
-            }
-            Write-Host "OAuth self-test passed."
-            return
-        }
-        if ($status.test.status -eq "failed") {
-            throw "OAuth self-test failed: $($status.test.error)"
-        }
-        Start-Sleep -Milliseconds 250
-    } while ([DateTime]::UtcNow -lt $deadline)
-
-    throw "Timed out waiting for OAuth self-test"
-}
-
 function Assert-EchoTool {
     param(
         [string]$BaseUrl,
@@ -141,6 +82,7 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $binary = (Resolve-Path $BinaryPath).Path
 $tempRoot = Join-Path $repoRoot ("tmp\release-smoke-" + [Guid]::NewGuid().ToString("N"))
 $helperPath = Join-Path $tempRoot "mcp-center-smoke-upstream.exe"
+$oauthHelperPath = Join-Path $tempRoot "mcp-center-smoke-oauth.exe"
 $dataDir = Join-Path $tempRoot "data"
 $centerPort = Get-FreePort
 $httpMcpPort = Get-FreePort
@@ -158,6 +100,9 @@ try {
         Write-Host "Building smoke MCP upstream..."
         go build -trimpath -o $helperPath .\scripts\smoke-upstream.go
         if ($LASTEXITCODE -ne 0) { throw "Failed to build smoke MCP upstream" }
+        Write-Host "Building OAuth smoke verifier..."
+        go build -trimpath -o $oauthHelperPath .\scripts\smoke-oauth
+        if ($LASTEXITCODE -ne 0) { throw "Failed to build OAuth smoke verifier" }
     } finally {
         Pop-Location
     }
@@ -199,7 +144,9 @@ try {
     Assert-EchoTool -BaseUrl $baseUrl -McpId $httpMcpId -Message "http-ok"
     Write-Host "HTTP MCP passed."
 
-    Assert-OAuthSelfTest -BaseUrl $baseUrl -McpRef "smoke-http"
+    Write-Host "Testing OAuth authorization + PKCE + refresh + revoke..."
+    & $oauthHelperPath --base-url $baseUrl --username "smokeadmin" --password "smoke-password-12345" --mcp-ref "smoke-http"
+    if ($LASTEXITCODE -ne 0) { throw "OAuth self-test failed" }
 
     $stdioMcp = Invoke-CenterJson -Method Post -Uri "$baseUrl/api/mcps" -Session $script:CenterSession -Body @{
         name = "smoke-stdio"

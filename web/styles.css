@@ -3,7 +3,7 @@
 
 /* Password visibility controls in account initialization and login. */
 .password-input-wrap{position:relative;width:100%}
-.password-input-wrap input{width:100%;padding-right:76px}
+.password-input-wrap input{width:100%}#auth-password{padding-right:76px}
 .password-visibility-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--muted);padding:6px 10px;border-radius:6px;font-size:12px;line-height:1.25;cursor:pointer}
 .password-visibility-toggle:hover{color:var(--primary);background:var(--subtle)}
 .password-visibility-toggle:focus-visible{outline:2px solid var(--primary);outline-offset:2px}

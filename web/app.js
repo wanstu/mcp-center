@@ -108,14 +108,15 @@ async function bootstrap(){
     document.body.innerHTML='<main style="padding:32px;font-family:Segoe UI,sans-serif"><h1>MCP Center 启动失败</h1><p>'+escapeHTML(error.message)+'</p></main>';
   }
 }
-function setPasswordVisibility(inputID,visible){
-  const field=el(inputID);
-  const button=document.querySelector('[data-password-toggle="'+inputID+'"]');
-  if(!field||!button)return;
-  field.type=visible?'text':'password';
+function setPasswordVisibility(visible){
+  for(const inputID of ['auth-password','auth-confirm-password']){
+    const field=el(inputID);
+    if(field)field.type=visible?'text':'password';
+  }
+  const button=document.querySelector('[data-password-toggle="auth-password"]');
+  if(!button)return;
   button.textContent=visible?'隐藏':'显示';
-  const label=inputID==='auth-confirm-password'?'确认密码':'密码';
-  button.setAttribute('aria-label',(visible?'隐藏':'显示')+label);
+  button.setAttribute('aria-label',visible?'隐藏密码':'显示密码');
   button.setAttribute('aria-pressed',String(visible));
 }
 function showAuth(setup){
@@ -126,8 +127,7 @@ function showAuth(setup){
   el('auth-confirm-password').value='';
   el('auth-password').value='';
   el('auth-password').autocomplete=setup?'new-password':'current-password';
-  setPasswordVisibility('auth-password',false);
-  setPasswordVisibility('auth-confirm-password',false);
+  setPasswordVisibility(false);
   clearError(el('auth-error'));
   el('auth-submit').textContent=setup?'创建管理员':'登录';
   state.needsBootstrap=setup;el('auth-username').focus();
@@ -1162,7 +1162,7 @@ document.addEventListener('click',event=>{
 el('auth-form').addEventListener('submit',submitAuth);
 document.querySelectorAll('[data-password-toggle]').forEach(button=>button.addEventListener('click',()=>{
   const field=el(button.dataset.passwordToggle);
-  setPasswordVisibility(field.id,field.type==='password');
+  setPasswordVisibility(field.type==='password');
 }));
 el('auth-confirm-password').addEventListener('input',()=>clearError(el('auth-error')));
 el('logout').onclick=async()=>{try{await api('/api/auth/logout',{method:'POST'})}finally{state.user=null;showAuth(false)}};

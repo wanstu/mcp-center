@@ -13,7 +13,8 @@ function between(start,end){
 assert.match(html,/id="auth-confirm-field"/);
 assert.match(html,/id="auth-confirm-password"[^>]+type="password"/);
 assert.match(html,/data-password-toggle="auth-password"/);
-assert.match(html,/data-password-toggle="auth-confirm-password"/);
+assert.equal((html.match(/data-password-toggle="auth-confirm-password"/g)||[]).length,0);
+assert.equal((html.match(/data-password-toggle="auth-password"/g)||[]).length,1);
 const code=between("function setPasswordVisibility(","async function enterApp(")+"\n"+
            between("async function submitAuth(","function switchPage(");
 let calls=[],entered=0,focused="";
@@ -27,7 +28,7 @@ function fakeElement(id){
 }
 const names=["app","auth-screen","setup-copy","login-copy","auth-submit","auth-username","auth-password","auth-confirm-password","auth-confirm-field","auth-error"];
 const elements=Object.fromEntries(names.map(id=>[id,fakeElement(id)]));
-const buttonIDs=["auth-password","auth-confirm-password"];
+const buttonIDs=["auth-password"];
 const buttons=Object.fromEntries(buttonIDs.map(id=>[id,fakeElement("button-"+id)]));
 const el=id=>elements[id];
 const state={needsBootstrap:false,user:null};
@@ -44,13 +45,15 @@ vm.runInContext(code,context);
  assert.equal(el("auth-confirm-field").classList.contains("hidden"),false);
  assert.equal(el("auth-confirm-password").required,true);
  assert.equal(el("auth-password").autocomplete,"new-password");
- context.setPasswordVisibility("auth-password",true);
+ context.setPasswordVisibility(true);
  assert.equal(el("auth-password").type,"text");
- assert.equal(buttons["auth-password"]["aria-pressed"],"true");
- context.setPasswordVisibility("auth-password",false);
- assert.equal(el("auth-password").type,"password");
- context.setPasswordVisibility("auth-confirm-password",true);
  assert.equal(el("auth-confirm-password").type,"text");
+ assert.equal(buttons["auth-password"]["aria-pressed"],"true");
+ assert.equal(buttons["auth-password"].textContent,"隐藏");
+ context.setPasswordVisibility(false);
+ assert.equal(el("auth-password").type,"password");
+ assert.equal(el("auth-confirm-password").type,"password");
+ assert.equal(buttons["auth-password"]["aria-pressed"],"false");
  el("auth-username").value="admin";
  el("auth-password").value="very-secure-password";
  el("auth-confirm-password").value="another-password";
@@ -77,5 +80,5 @@ vm.runInContext(code,context);
  await context.submitAuth({preventDefault(){}});
  assert.equal(calls.length,2);
  assert.equal(calls[1].url,"/api/auth/login");
- console.log("PASS: setup repeat password, mismatch rejection, visibility buttons and login mode");
+ console.log("PASS: setup repeat password, mismatch rejection, single synchronized visibility toggle and login mode");
 })().catch(error=>{console.error(error);process.exitCode=1});

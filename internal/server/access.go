@@ -138,23 +138,17 @@ func (a *App) authenticateMCPRequest(r *http.Request, ref string) (mcpPrincipal,
 	}
 
 	candidate := candidates[0]
-	resource := a.mcpResourceURL(ref)
+	resource := a.mcpResourceURLForRequest(r, ref)
 	if candidate.Channel == accesscore.ChannelBearer {
-		oauthEnabled, oauthSettingsErr := a.oauthEnabled()
-		if oauthSettingsErr != nil {
-			return mcpPrincipal{}, oauthSettingsErr
-		}
-		if oauthEnabled {
-			grant, oauthErr := a.oauth.ValidateAccessTokenForResource(candidate.Secret, resource)
-			if oauthErr == nil {
-				if !scopeContains(grant.Scope, "mcp:*") {
-					return mcpPrincipal{}, errors.New("OAuth token does not grant mcp:*")
-				}
-				return mcpPrincipal{
-					ID: grant.UserID, DisplayName: grant.ClientID, Kind: "oauth",
-					Scopes: strings.Fields(grant.Scope), AuthChannel: accesscore.ChannelBearer,
-				}, nil
+		grant, oauthErr := a.oauth.ValidateAccessTokenForResource(candidate.Secret, resource)
+		if oauthErr == nil {
+			if !scopeContains(grant.Scope, "mcp:*") {
+				return mcpPrincipal{}, errors.New("OAuth token does not grant mcp:*")
 			}
+			return mcpPrincipal{
+				ID: grant.UserID, DisplayName: grant.ClientID, Kind: "oauth",
+				Scopes: strings.Fields(grant.Scope), AuthChannel: accesscore.ChannelBearer,
+			}, nil
 		}
 	}
 

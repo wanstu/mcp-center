@@ -10,8 +10,16 @@ func (a *App) mcpResourceURL(ref string) string {
 	return strings.TrimRight(a.baseURL, "/") + "/mcp/" + url.PathEscape(ref)
 }
 
+func (a *App) mcpResourceURLForRequest(r *http.Request, ref string) string {
+	return a.connectionBaseURL(r) + "/mcp/" + url.PathEscape(ref)
+}
+
 func (a *App) mcpProtectedResourceMetadataURL(ref string) string {
 	return strings.TrimRight(a.baseURL, "/") + "/.well-known/oauth-protected-resource/mcp/" + url.PathEscape(ref)
+}
+
+func (a *App) mcpProtectedResourceMetadataURLForRequest(r *http.Request, ref string) string {
+	return a.connectionBaseURL(r) + "/.well-known/oauth-protected-resource/mcp/" + url.PathEscape(ref)
 }
 
 // connectionBaseURL uses the address actually opened by the user unless an
@@ -44,7 +52,7 @@ func (a *App) handleConnectionInfo(w http.ResponseWriter, r *http.Request) {
 		"mcp_endpoint_template":         baseURL + "/mcp/{id}",
 		"mcp_id_endpoint_template":      baseURL + "/mcp/{id}",
 		"mcp_name_endpoint_template":    baseURL + "/mcp/{name}",
-		"authorization_server_metadata": a.baseURL + "/.well-known/oauth-authorization-server",
+		"authorization_server_metadata": baseURL + "/.well-known/oauth-authorization-server",
 		"is_loopback":                   isLoopback,
 	})
 }

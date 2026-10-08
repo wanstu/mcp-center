@@ -65,15 +65,13 @@ type authorizeView struct {
 	CodeChallengeMethod string
 }
 
-func (a *App) handleAuthorizationServerMetadata(w http.ResponseWriter, _ *http.Request) {
-	if !a.requireOAuthEnabled(w) {
-		return
-	}
+func (a *App) handleAuthorizationServerMetadata(w http.ResponseWriter, r *http.Request) {
+	baseURL := a.connectionBaseURL(r)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"issuer":                                         a.baseURL,
-		"authorization_endpoint":                         a.baseURL + "/oauth/authorize",
-		"token_endpoint":                                 a.baseURL + "/oauth/token",
-		"revocation_endpoint":                            a.baseURL + "/oauth/revoke",
+		"issuer":                                         baseURL,
+		"authorization_endpoint":                         baseURL + "/oauth/authorize",
+		"token_endpoint":                                 baseURL + "/oauth/token",
+		"revocation_endpoint":                            baseURL + "/oauth/revoke",
 		"response_types_supported":                       []string{"code"},
 		"grant_types_supported":                          []string{"authorization_code", "refresh_token"},
 		"code_challenge_methods_supported":               []string{"S256"},
@@ -85,10 +83,8 @@ func (a *App) handleAuthorizationServerMetadata(w http.ResponseWriter, _ *http.R
 }
 
 func (a *App) handleProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOAuthEnabled(w) {
-		return
-	}
-	resource := strings.TrimRight(a.baseURL, "/") + "/mcp"
+	baseURL := a.connectionBaseURL(r)
+	resource := baseURL + "/mcp"
 	suffix := strings.TrimPrefix(r.URL.Path, "/.well-known/oauth-protected-resource")
 	if strings.HasPrefix(suffix, "/mcp/") {
 		ref := strings.TrimPrefix(suffix, "/mcp/")
@@ -101,24 +97,21 @@ func (a *App) handleProtectedResourceMetadata(w http.ResponseWriter, r *http.Req
 			writeError(w, http.StatusServiceUnavailable, errors.New("MCP 已禁用"))
 			return
 		}
-		resource = a.mcpResourceURL(ref)
+		resource = a.mcpResourceURLForRequest(r, ref)
 	} else if suffix != "" && suffix != "/" {
 		writeError(w, http.StatusNotFound, errors.New("unknown protected resource"))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"resource":                 resource,
-		"authorization_servers":    []string{a.baseURL},
+		"authorization_servers":    []string{baseURL},
 		"scopes_supported":         []string{"mcp:*"},
 		"bearer_methods_supported": []string{"header"},
 	})
 }
 
 func (a *App) handleOAuthAuthorizeGet(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOAuthEnabled(w) {
-		return
-	}
-	view, err := a.authorizeViewFromValues(r.URL.Query())
+	view, err := a.authorizeViewFromValues(r, r.URL.Query())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -142,14 +135,11 @@ func (a *App) handleOAuthAuthorizeGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleOAuthAuthorizePost(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOAuthEnabled(w) {
-		return
-	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
 	}
-	view, err := a.authorizeViewFromValues(r.PostForm)
+	view, err := a.authorizeViewFromValues(r, r.PostForm)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -181,7 +171,7 @@ func (a *App) handleOAuthAuthorizePost(w http.ResponseWriter, r *http.Request) {
 
 	if r.PostForm.Get("decision") == "deny" {
 		redirectOAuthResult(w, r, view.RedirectURI, map[string]string{
-			"error": "access_denied", "state": view.State, "iss": a.baseURL,
+			"error": "access_denied", "state": view.State, "iss": a.connectionBaseURL(r),
 		})
 		return
 	}
@@ -200,14 +190,11 @@ func (a *App) handleOAuthAuthorizePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectOAuthResult(w, r, view.RedirectURI, map[string]string{
-		"code": code, "state": view.State, "iss": a.baseURL,
+		"code": code, "state": view.State, "iss": a.connectionBaseURL(r),
 	})
 }
 
 func (a *App) handleOAuthToken(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOAuthEnabled(w) {
-		return
-	}
 	if err := r.ParseForm(); err != nil {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "invalid form")
 		return
@@ -252,9 +239,6 @@ func (a *App) exchangeOAuthToken(values url.Values) (oauthcore.TokenSet, string,
 }
 
 func (a *App) handleOAuthRevoke(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOAuthEnabled(w) {
-		return
-	}
 	if err := r.ParseForm(); err != nil {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "invalid form")
 		return
@@ -277,7 +261,7 @@ func (a *App) revokeOAuthToken(values url.Values) error {
 	return a.oauth.RevokeToken(clientID, token)
 }
 
-func (a *App) authorizeViewFromValues(values url.Values) (authorizeView, error) {
+func (a *App) authorizeViewFromValues(r *http.Request, values url.Values) (authorizeView, error) {
 	view := authorizeView{
 		ResponseType:        values.Get("response_type"),
 		ClientID:            strings.TrimSpace(values.Get("client_id")),
@@ -303,14 +287,22 @@ func (a *App) authorizeViewFromValues(values url.Values) (authorizeView, error) 
 	if view.Scope != "mcp:*" {
 		return authorizeView{}, errors.New("this version supports only mcp:* scope")
 	}
-	if !a.isLocalMCPResource(view.Resource) {
+	if !a.isLocalMCPResourceForRequest(r, view.Resource) {
 		return authorizeView{}, errors.New("resource must identify an existing MCP Center /mcp/{id-or-name} endpoint")
 	}
 	return view, nil
 }
 
 func (a *App) isLocalMCPResource(resource string) bool {
-	base, err := url.Parse(a.baseURL)
+	return a.isLocalMCPResourceAtBase(resource, a.baseURL)
+}
+
+func (a *App) isLocalMCPResourceForRequest(r *http.Request, resource string) bool {
+	return a.isLocalMCPResourceAtBase(resource, a.connectionBaseURL(r))
+}
+
+func (a *App) isLocalMCPResourceAtBase(resource, baseURL string) bool {
+	base, err := url.Parse(baseURL)
 	if err != nil {
 		return false
 	}

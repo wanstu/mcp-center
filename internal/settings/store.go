@@ -13,7 +13,6 @@ import (
 
 type Values struct {
 	AuditRetentionDays   int      `json:"audit_retention_days"`
-	OAuthDisabled        bool     `json:"oauth_disabled,omitempty"`
 	HostWhitelistEnabled bool     `json:"host_whitelist_enabled"`
 	AllowedHosts         []string `json:"allowed_hosts"`
 }

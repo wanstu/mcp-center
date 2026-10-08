@@ -109,7 +109,7 @@ func TestAccessCredentialAPIAndChannels(t *testing.T) {
 	}
 }
 
-func TestOAuthDisabledKeepsStaticBearerCredentialsWorking(t *testing.T) {
+func TestOAuthEnabledKeepsStaticBearerCredentialsWorking(t *testing.T) {
 	app := newTestApp(t)
 	session := bootstrapSession(t, app)
 	handler := app.Handler()
@@ -128,16 +128,9 @@ func TestOAuthDisabledKeepsStaticBearerCredentialsWorking(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	settings := requestJSON(t, handler, http.MethodPut, "/api/settings", map[string]any{
-		"oauth_disabled": true,
-	}, session)
-	if settings.Code != http.StatusOK {
-		t.Fatalf("disable OAuth = %d %s", settings.Code, settings.Body.String())
-	}
-
 	metadata := requestJSON(t, handler, http.MethodGet, "/.well-known/oauth-authorization-server", nil)
-	if metadata.Code != http.StatusServiceUnavailable {
-		t.Fatalf("OAuth metadata while disabled = %d %s", metadata.Code, metadata.Body.String())
+	if metadata.Code != http.StatusOK {
+		t.Fatalf("OAuth metadata should be available = %d %s", metadata.Code, metadata.Body.String())
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/mcp/example", nil)

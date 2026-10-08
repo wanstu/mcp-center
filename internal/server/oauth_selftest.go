@@ -73,9 +73,6 @@ func oauthSelfTestSteps() []oauthSelfTestStep {
 }
 
 func (a *App) handleOAuthTestStart(w http.ResponseWriter, r *http.Request) {
-	if !a.requireOAuthEnabled(w) {
-		return
-	}
 	var input struct {
 		MCPRef string `json:"mcp_ref"`
 	}
@@ -109,7 +106,7 @@ func (a *App) handleOAuthTestStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirectURI := strings.TrimRight(a.baseURL, "/") + "/oauth/test/callback"
+	redirectURI := a.connectionBaseURL(r) + "/oauth/test/callback"
 	client, err := a.oauth.RegisterClient(oauthcore.ClientMetadata{
 		ClientName:    "MCP Center OAuth Self-Test",
 		RedirectURIs:  []string{redirectURI},
@@ -124,7 +121,7 @@ func (a *App) handleOAuthTestStart(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	session := &oauthSelfTest{
 		ID: id, MCPID: def.ID, MCPName: def.Name,
-		Resource:  a.mcpResourceURL(def.Name),
+		Resource:  a.mcpResourceURLForRequest(r, def.Name),
 		Status:    "waiting_authorization",
 		Steps:     oauthSelfTestSteps(),
 		CreatedAt: now, UpdatedAt: now, ExpiresAt: now.Add(oauthSelfTestTTL),
@@ -147,7 +144,7 @@ func (a *App) handleOAuthTestStart(w http.ResponseWriter, r *http.Request) {
 	values.Set("state", state)
 	values.Set("code_challenge", oauthcore.PKCEChallengeS256(verifier))
 	values.Set("code_challenge_method", oauthcore.CodeChallengeMethodS256)
-	authorizeURL := strings.TrimRight(a.baseURL, "/") + "/oauth/authorize?" + values.Encode()
+	authorizeURL := a.connectionBaseURL(r) + "/oauth/authorize?" + values.Encode()
 
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"test":          oauthSelfTestPublic(session),

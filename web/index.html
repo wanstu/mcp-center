@@ -216,7 +216,7 @@
           <div id="credential-empty" class="empty hidden">还没有 Access Credential。</div>
         </div>
         <article class="panel">
-          <div class="panel-head"><div><div class="row"><h2>OAuth Clients</h2><span id="oauth-service-status" class="status ok">已启用</span></div><p>Authorization Code + PKCE S256。Client 只允许管理员显式创建，不开放动态注册。</p></div><div class="row"><button id="oauth-self-test" class="button">OAuth 自测</button><button id="add-oauth-client" class="button">创建 OAuth Client</button></div></div>
+          <div class="panel-head"><div><div class="row"><h2>OAuth Clients</h2><span class="status ok">可用</span></div><p>Authorization Code + PKCE S256。访问地址统一遵守白名单，Client 仍需管理员显式创建，不开放动态注册。</p></div><div class="row"><button id="oauth-self-test" class="button">OAuth 自测</button><button id="add-oauth-client" class="button">创建 OAuth Client</button></div></div>
           <div class="grid-2">
             <div>
               <h2>Authorization Server</h2>
@@ -267,7 +267,7 @@
           <div class="panel">
             <div class="panel-head"><div><h2>能力状态</h2><p>当前控制程序已启用的核心能力。</p></div></div>
             <div class="setting"><div><strong>版本</strong><span id="settings-version">读取中…</span></div><span class="status">Build</span></div>
-            <div class="setting"><div><strong>OAuth</strong><span>Authorization Code + PKCE</span></div><span id="settings-oauth-status" class="status ok">已启用</span></div>
+            <div class="setting"><div><strong>OAuth</strong><span>Authorization Code + PKCE；访问地址统一遵守域名/IP 白名单</span></div><span class="status ok">可用</span></div>
             <div class="setting"><div><strong>Bearer / Header / Query</strong><span>统一 Access Credential，可独立开关授权入口</span></div><span class="status ok">已接入</span></div>
             <div class="setting"><div><strong>调用审计</strong><span>JSONL 持久化，参数仅记录键名和类型</span></div><span class="status ok">已接入</span></div>
             <div class="setting"><div><strong>Runtime Session Manager</strong><span>连接复用、tools/list 缓存、刷新、断开、配置变更自动失效</span></div><span class="status ok">已接入</span></div>
@@ -276,23 +276,22 @@
         <div class="panel">
           <div class="panel-head"><div><h2>运行配置</h2><p>这些值来自当前进程启动参数；修改后需要重启 MCP Center。</p></div><span class="status warn">修改需重启</span></div>
           <div class="setting"><div><strong>Listen Address</strong><span id="settings-listen-address">读取中…</span></div><code>--listen</code></div>
-          <div class="setting"><div><strong>External Base URL</strong><span id="settings-base-url">读取中…</span></div><code>--base-url</code></div>
+          <div class="setting"><div><strong>当前外部访问地址</strong><span id="settings-base-url">读取中…</span></div><code>自动 / --base-url</code></div>
           <div class="setting"><div><strong>Data Directory</strong><span id="settings-data-dir">读取中…</span></div><code>--data-dir</code></div>
-          <div id="settings-base-url-warning" class="notice hidden">当前地址为本机地址，其他设备可直接通过服务器 IP:8610 访问；如使用 OAuth 对外授权，建议设置固定的 HTTPS <code>--base-url</code>。</div>
+          <div id="settings-base-url-warning" class="notice hidden">当前显示的是本机地址；其他设备可使用服务器 IP 或域名访问，OAuth 授权地址会自动跟随实际访问地址。公网使用建议配置 HTTPS。</div>
         </div>
         <div class="panel">
           <div class="panel-head">
-            <div><h2>服务策略</h2><p>控制 OAuth 服务和本地审计日志策略。</p></div>
+            <div><h2>日志策略</h2><p>设置本地审计日志保留期限；OAuth 授权服务始终可用，统一受访问地址白名单约束。</p></div>
           </div>
           <div class="form-grid">
-            <label class="channel-card span-2"><span><strong>OAuth 授权服务</strong><small>关闭后 Discovery、Authorize、Token、Revoke 与 OAuth 自测不可用；Static Bearer / Header / Query 不受影响。</small></span><input id="settings-oauth-enabled" type="checkbox" checked></label>
             <label class="field">审计日志保留天数
               <input id="settings-audit-retention" type="number" min="1" max="3650" value="30">
               <small>默认 30 天；保存后会立即删除超过保留期的日志。</small>
             </label>
           </div>
           <p id="settings-system-error" class="form-error hidden"></p>
-          <div class="row end"><button id="save-system-settings" class="button primary">保存服务策略</button></div>
+          <div class="row end"><button id="save-system-settings" class="button primary">保存日志策略</button></div>
         </div>
         <div class="panel">
           <div class="panel-head"><div><h2>访问地址白名单</h2><p>默认关闭：任何域名或 IP 都可以用于访问；这是访问地址检查，不是访客来源 IP 过滤。</p></div></div>

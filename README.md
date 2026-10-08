@@ -37,7 +37,7 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - OAuth Client 管理：管理员显式创建 / 编辑 / 删除，Public Client + PKCE
 - OAuth Client 修改 / 删除会撤销已有授权码与 Token；不开放动态客户端注册
 - OAuth 端到端自测：临时 Client + PKCE → 浏览器授权 → Token → MCP tools/list → Refresh → Revoke → 自动清理
-- OAuth 服务总开关：默认开启；关闭后 Discovery / Authorize / Token / Revoke / OAuth 自测停用，Static Bearer / Header / Query 保持可用
+- OAuth 服务默认可用，不再提供独立的服务开关；OAuth Discovery / Authorize / Token / Revoke / 自测和管理控制台统一遵守可选的 Host 域名/IP 白名单；OAuth Client、PKCE、Token 认证仍然独立执行
 - OAuth Token 主动撤销：`/oauth/revoke`，Access / Refresh Grant 一并失效
 - 上游密钥变量：供 MCP Header / stdio Env 中的 `${NAME}` 引用
 - 上游密钥使用本地随机主密钥 + AES-GCM 加密保存；列表和 API 不回显明文
@@ -69,7 +69,7 @@ http://127.0.0.1:8610/
 
 在 **设置 → 访问地址白名单** 可以单独启用域名/IP 白名单，默认关闭。这里检查请求访问的 **Host 域名/IP**，不是客户端来源 IP；白名单每行一个域名或服务器 IP，不包含端口/协议，保存后立即生效。登录与 MCP 访问密钥认证仍会独立执行。
 
-外部 MCP 链接默认跟随当前访问控制台所使用的地址。只有需要对外提供固定的 OAuth 颁发者地址时，才建议使用 `--base-url https://mcp.example.com` 明确指定公开的 HTTPS 地址。
+外部 MCP 链接以及 OAuth Metadata / Authorize / Token / Resource 默认使用当前请求的域名/IP，不需要单独设置 OAuth 开关或 `--base-url`。**出于 OAuth 令牌安全要求，非本机资源必须使用 HTTPS**；HTTP OAuth 仅支持 `localhost` / 回环 IP。若通过反向代理终止 HTTPS，可以按需用 `--base-url` 固定公开的 HTTPS 地址。白名单只限制请求 Host，不代表跳过 OAuth 登录、客户端授权和 Token 校验。
 
 查看当前版本：
 

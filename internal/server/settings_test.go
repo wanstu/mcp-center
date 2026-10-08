@@ -10,30 +10,28 @@ import (
 	mcpcenter "github.com/wanstu/mcp-center-core"
 )
 
-func TestSettingsAPIPartialUpdatePreservesOAuthState(t *testing.T) {
+func TestSettingsDoesNotExposeOAuthSwitch(t *testing.T) {
 	app := newTestApp(t)
 	handler := app.Handler()
 	session := bootstrapSession(t, app)
 
-	disable := requestJSON(t, handler, http.MethodPut, "/api/settings", map[string]any{
+	legacy := requestJSON(t, handler, http.MethodPut, "/api/settings", map[string]any{
 		"oauth_disabled": true,
 	}, session)
-	if disable.Code != http.StatusOK || !strings.Contains(disable.Body.String(), "\"oauth_disabled\":true") {
-		t.Fatalf("disable OAuth = %d %s", disable.Code, disable.Body.String())
+	if legacy.Code != http.StatusBadRequest {
+		t.Fatalf("OAuth switch should no longer be writable: %d %s", legacy.Code, legacy.Body.String())
 	}
 
 	retention := requestJSON(t, handler, http.MethodPut, "/api/settings", map[string]any{
 		"audit_retention_days": 14,
 	}, session)
-	if retention.Code != http.StatusOK || !strings.Contains(retention.Body.String(), "\"oauth_disabled\":true") {
-		t.Fatalf("retention update reset OAuth state = %d %s", retention.Code, retention.Body.String())
+	if retention.Code != http.StatusOK || strings.Contains(retention.Body.String(), "oauth_disabled") {
+		t.Fatalf("settings still expose OAuth switch: %d %s", retention.Code, retention.Body.String())
 	}
 
-	enable := requestJSON(t, handler, http.MethodPut, "/api/settings", map[string]any{
-		"oauth_disabled": false,
-	}, session)
-	if enable.Code != http.StatusOK || strings.Contains(enable.Body.String(), "\"oauth_disabled\":true") {
-		t.Fatalf("enable OAuth = %d %s", enable.Code, enable.Body.String())
+	metadata := requestJSON(t, handler, http.MethodGet, "/.well-known/oauth-authorization-server", nil)
+	if metadata.Code != http.StatusOK {
+		t.Fatalf("OAuth metadata unavailable: %d %s", metadata.Code, metadata.Body.String())
 	}
 }
 

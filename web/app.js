@@ -12,7 +12,7 @@ function clearError(node){node.textContent='';node.classList.add('hidden')}
 const mockData={mcps:[
 {id:'mcp_demo_adm',name:'pj-adm',transport:'streamable-http',auth_mode:'none',endpoint:'http://127.0.0.1:8001/mcp',default_include_in_environment:true},
 {id:'mcp_demo_db',name:'wm-test-db',transport:'stdio',auth_mode:'none',executable:'mysql-mcp',args:['--readonly'],default_include_in_environment:false}
-],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},systemSettings:{audit_retention_days:30,oauth_disabled:false,host_whitelist_enabled:false,allowed_hosts:[]},credentials:[],oauthClients:[],upstreamSecrets:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
+],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},systemSettings:{audit_retention_days:30,host_whitelist_enabled:false,allowed_hosts:[]},credentials:[],oauthClients:[],upstreamSecrets:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
 
 async function api(path,options={}){
   if(state.mock)return mockApi(path,options);
@@ -720,15 +720,10 @@ async function callTool(){
 async function loadOAuth(){
   try{
     const [settingsResult,clientsResult]=await Promise.all([api('/api/settings'),api('/api/oauth/clients')]);
-    state.systemSettings=settingsResult.settings||state.systemSettings||{audit_retention_days:30,oauth_disabled:false};
-    renderOAuthServiceState();
+    state.systemSettings=settingsResult.settings||state.systemSettings||{audit_retention_days:30};
     state.oauthClients=clientsResult.clients||[];
     renderOAuthClients();
     const box=el('oauth-meta');box.innerHTML='';
-    if(state.systemSettings.oauth_disabled){
-      box.innerHTML='<div class="notice">OAuth 当前已关闭。已有 Client 配置会保留，但 Discovery、Authorize、Token、Revoke 和 OAuth 自测不可用。</div>';
-      return;
-    }
     const meta=await api('/.well-known/oauth-authorization-server');
     for(const key of ['issuer','authorization_endpoint','token_endpoint']){
       const line=document.createElement('div');
@@ -824,7 +819,6 @@ function startOAuthSelfTestPolling(){
   oauthTestPollTimer=setInterval(pollOAuthSelfTest,900);
 }
 function openOAuthSelfTestDialog(){
-  if(state.systemSettings?.oauth_disabled){toast('OAuth 已关闭，请先在设置中启用');return}
   stopOAuthSelfTestPolling();
   state.oauthTestID='';state.oauthTestStatus='';state.oauthTestAuthorizeURL='';
   const select=el('oauth-test-mcp');select.innerHTML='';
@@ -942,35 +936,23 @@ async function loadVersion(){
   if(info.commit)value+=' ('+info.commit+(info.modified?', modified':'')+')';
   node.textContent=value;
 }
-function renderOAuthServiceState(){
-  const enabled=!Boolean(state.systemSettings?.oauth_disabled);
-  const settingsBadge=el('settings-oauth-status');
-  if(settingsBadge){settingsBadge.textContent=enabled?'已启用':'已关闭';settingsBadge.className='status '+(enabled?'ok':'warn')}
-  const accessBadge=el('oauth-service-status');
-  if(accessBadge){accessBadge.textContent=enabled?'已启用':'已关闭';accessBadge.className='status '+(enabled?'ok':'warn')}
-  if(el('settings-oauth-enabled'))el('settings-oauth-enabled').checked=enabled;
-  if(el('oauth-self-test'))el('oauth-self-test').disabled=!enabled;
-}
 async function loadSystemSettings(){
   const result=await api('/api/settings');
-  state.systemSettings=result.settings||{audit_retention_days:30,oauth_disabled:false};
+  state.systemSettings=result.settings||{audit_retention_days:30};
   el('settings-audit-retention').value=state.systemSettings.audit_retention_days??30;
   el('settings-host-whitelist-enabled').checked=Boolean(state.systemSettings.host_whitelist_enabled);
   el('settings-allowed-hosts').value=(state.systemSettings.allowed_hosts||[]).join('\n');
-  renderOAuthServiceState();
 }
 async function saveSystemSettings(){
   clearError(el('settings-system-error'));
   const days=Number(el('settings-audit-retention').value);
   if(!Number.isInteger(days)||days<1||days>3650){showError(el('settings-system-error'),'审计日志保留天数必须是 1 到 3650 的整数');return}
-  const oauthDisabled=!el('settings-oauth-enabled').checked;
   try{
-    const result=await api('/api/settings',{method:'PUT',body:JSON.stringify({audit_retention_days:days,oauth_disabled:oauthDisabled})});
+    const result=await api('/api/settings',{method:'PUT',body:JSON.stringify({audit_retention_days:days})});
     state.systemSettings=result.settings;
     el('settings-allowed-hosts').value=(state.systemSettings.allowed_hosts||[]).join('\n');
-    renderOAuthServiceState();
     await Promise.all([loadAuditSummary(),loadAudit().catch(()=>{}),loadOAuth().catch(()=>{})]);
-    toast('服务策略已保存');
+    toast('日志策略已保存');
   }catch(error){showError(el('settings-system-error'),error)}
 }
 async function saveNetworkSettings(){

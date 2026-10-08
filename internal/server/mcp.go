@@ -161,7 +161,7 @@ func (a *App) handleMCPProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	principal, err := a.authenticateMCPRequest(r, ref)
 	if err != nil {
-		a.writeBearerChallenge(w, ref)
+		a.writeBearerChallenge(w, r, ref)
 		return
 	}
 	r = r.WithContext(auditContextForMCP(r, principal))
@@ -208,8 +208,8 @@ func (a *App) invalidateAllProxies() {
 	a.proxyMu.Unlock()
 }
 
-func (a *App) writeBearerChallenge(w http.ResponseWriter, ref string) {
-	metadata := a.mcpProtectedResourceMetadataURL(ref)
+func (a *App) writeBearerChallenge(w http.ResponseWriter, r *http.Request, ref string) {
+	metadata := a.mcpProtectedResourceMetadataURLForRequest(r, ref)
 	w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+metadata+`", scope="mcp:*"`)
 	writeError(w, http.StatusUnauthorized, errors.New("valid OAuth token or MCP access credential with mcp:* scope is required"))
 }

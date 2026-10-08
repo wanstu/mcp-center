@@ -1,30 +1,8 @@
 package server
 
 import (
-	"errors"
 	"net/http"
 )
-
-func (a *App) oauthEnabled() (bool, error) {
-	values, err := a.settings.Get()
-	if err != nil {
-		return false, err
-	}
-	return !values.OAuthDisabled, nil
-}
-
-func (a *App) requireOAuthEnabled(w http.ResponseWriter) bool {
-	enabled, err := a.oauthEnabled()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return false
-	}
-	if !enabled {
-		writeError(w, http.StatusServiceUnavailable, errors.New("OAuth 已关闭"))
-		return false
-	}
-	return true
-}
 
 func (a *App) handleSettingsGet(w http.ResponseWriter, _ *http.Request) {
 	values, err := a.settings.Get()
@@ -38,7 +16,6 @@ func (a *App) handleSettingsGet(w http.ResponseWriter, _ *http.Request) {
 func (a *App) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		AuditRetentionDays   *int      `json:"audit_retention_days,omitempty"`
-		OAuthDisabled        *bool     `json:"oauth_disabled,omitempty"`
 		HostWhitelistEnabled *bool     `json:"host_whitelist_enabled,omitempty"`
 		AllowedHosts         *[]string `json:"allowed_hosts,omitempty"`
 	}
@@ -53,9 +30,6 @@ func (a *App) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if input.AuditRetentionDays != nil {
 		current.AuditRetentionDays = *input.AuditRetentionDays
-	}
-	if input.OAuthDisabled != nil {
-		current.OAuthDisabled = *input.OAuthDisabled
 	}
 	if input.HostWhitelistEnabled != nil {
 		current.HostWhitelistEnabled = *input.HostWhitelistEnabled

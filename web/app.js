@@ -108,9 +108,27 @@ async function bootstrap(){
     document.body.innerHTML='<main style="padding:32px;font-family:Segoe UI,sans-serif"><h1>MCP Center 启动失败</h1><p>'+escapeHTML(error.message)+'</p></main>';
   }
 }
+function setPasswordVisibility(inputID,visible){
+  const field=el(inputID);
+  const button=document.querySelector('[data-password-toggle="'+inputID+'"]');
+  if(!field||!button)return;
+  field.type=visible?'text':'password';
+  button.textContent=visible?'隐藏':'显示';
+  const label=inputID==='auth-confirm-password'?'确认密码':'密码';
+  button.setAttribute('aria-label',(visible?'隐藏':'显示')+label);
+  button.setAttribute('aria-pressed',String(visible));
+}
 function showAuth(setup){
   el('app').classList.add('hidden');el('auth-screen').classList.remove('hidden');
   el('setup-copy').classList.toggle('hidden',!setup);el('login-copy').classList.toggle('hidden',setup);
+  el('auth-confirm-field').classList.toggle('hidden',!setup);
+  el('auth-confirm-password').required=setup;
+  el('auth-confirm-password').value='';
+  el('auth-password').value='';
+  el('auth-password').autocomplete=setup?'new-password':'current-password';
+  setPasswordVisibility('auth-password',false);
+  setPasswordVisibility('auth-confirm-password',false);
+  clearError(el('auth-error'));
   el('auth-submit').textContent=setup?'创建管理员':'登录';
   state.needsBootstrap=setup;el('auth-username').focus();
 }
@@ -123,6 +141,11 @@ async function enterApp(){
 async function submitAuth(event){
   event.preventDefault();clearError(el('auth-error'));
   const username=el('auth-username').value.trim(),password=el('auth-password').value;
+  if(state.needsBootstrap&&password!==el('auth-confirm-password').value){
+    showError(el('auth-error'),'两次输入的密码不一致，请重新确认');
+    el('auth-confirm-password').focus();
+    return;
+  }
   try{
     const path=state.needsBootstrap?'/api/setup/register':'/api/auth/login';
     const result=await api(path,{method:'POST',body:JSON.stringify({username,password})});
@@ -1137,6 +1160,11 @@ document.addEventListener('click',event=>{
   if(event.target.closest('[data-action="close-upstream-secret-dialog"]'))el('upstream-secret-dialog').close();
 });
 el('auth-form').addEventListener('submit',submitAuth);
+document.querySelectorAll('[data-password-toggle]').forEach(button=>button.addEventListener('click',()=>{
+  const field=el(button.dataset.passwordToggle);
+  setPasswordVisibility(field.id,field.type==='password');
+}));
+el('auth-confirm-password').addEventListener('input',()=>clearError(el('auth-error')));
 el('logout').onclick=async()=>{try{await api('/api/auth/logout',{method:'POST'})}finally{state.user=null;showAuth(false)}};
 el('refresh').onclick=async()=>{try{await Promise.all([loadMCPs(),loadAuditSummary()]);toast('已刷新')}catch(error){toast(error.message)}};
 el('probe-all').onclick=probeAll;

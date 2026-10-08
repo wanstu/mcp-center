@@ -25,7 +25,20 @@
       </div>
       <form id="auth-form" class="stack">
         <label class="field">用户名<input id="auth-username" autocomplete="username" required></label>
-        <label class="field">密码<input id="auth-password" type="password" autocomplete="current-password" minlength="10" required></label>
+        <div class="field">
+          <label for="auth-password">密码</label>
+          <div class="password-input-wrap">
+            <input id="auth-password" name="password" type="password" autocomplete="new-password" minlength="10" required>
+            <button class="password-visibility-toggle" type="button" data-password-toggle="auth-password" aria-label="显示密码" aria-pressed="false">显示</button>
+          </div>
+        </div>
+        <div id="auth-confirm-field" class="field">
+          <label for="auth-confirm-password">确认密码</label>
+          <div class="password-input-wrap">
+            <input id="auth-confirm-password" name="confirm_password" type="password" autocomplete="new-password" minlength="10" required>
+            <button class="password-visibility-toggle" type="button" data-password-toggle="auth-confirm-password" aria-label="显示确认密码" aria-pressed="false">显示</button>
+          </div>
+        </div>
         <button id="auth-submit" class="button primary" type="submit">创建管理员</button>
         <p id="auth-error" class="form-error hidden"></p>
       </form>

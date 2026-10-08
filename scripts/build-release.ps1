@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$Version,
-    [string]$OutputDir = "dist"
+    [string]$OutputDir = "dist",
+    [string]$KitRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +13,10 @@ if ($Version -notmatch '^v\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') {
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $coreRoot = Resolve-Path (Join-Path $repoRoot "..\mcp-center-core")
+if ([string]::IsNullOrWhiteSpace($KitRoot)) {
+    $KitRoot = Join-Path $repoRoot "..\wails-desktop-kit"
+}
+$KitRoot = (Resolve-Path $KitRoot).Path
 
 function Assert-CleanGitTree([string]$Path, [string]$Name) {
     $status = git -C $Path status --porcelain
@@ -29,9 +34,20 @@ Push-Location $repoRoot
 try {
     Assert-CleanGitTree $repoRoot "mcp-center"
     Assert-CleanGitTree $coreRoot "mcp-center-core"
+    Assert-CleanGitTree $KitRoot "wails-desktop-kit (systemd package helper)"
+    $expectedKitTag = "v0.10.1"
+    $expectedKitCommit = git -C $KitRoot rev-list -n 1 $expectedKitTag
+    if ($LASTEXITCODE -ne 0 -or -not $expectedKitCommit) {
+        throw "Missing Wails Desktop Kit packaging tag $expectedKitTag"
+    }
+    $actualKitCommit = git -C $KitRoot rev-parse HEAD
+    if ($LASTEXITCODE -ne 0 -or "$actualKitCommit".Trim() -ne "$expectedKitCommit".Trim()) {
+        throw "Wails Desktop Kit packaging must be checked out at $expectedKitTag"
+    }
 
     $commit = Get-Commit $repoRoot "mcp-center"
     $coreCommit = Get-Commit $coreRoot "mcp-center-core"
+    $kitPackagingCommit = Get-Commit $KitRoot "wails-desktop-kit packaging"
     $kitModule = go list -m -json github.com/wanstu/wails-desktop-kit | ConvertFrom-Json
     if ($LASTEXITCODE -ne 0 -or -not $kitModule.Version) {
         throw "Cannot resolve wails-desktop-kit module version"
@@ -88,6 +104,16 @@ try {
         $env:CGO_ENABLED = $oldCGO
     }
 
+    # Reuse the same product wrapper for RCs, official tags and preview packages.
+    # Wails Desktop Kit owns .deb/systemd lifecycle; Core remains untouched.
+    $absoluteReleaseDir = (Resolve-Path $releaseDir).Path
+    & go run ./scripts/package-linux/main.go -version $Version -kit $KitRoot -out $absoluteReleaseDir
+    if ($LASTEXITCODE -ne 0) { throw "MCP Center systemd Debian packaging failed" }
+    foreach ($arch in @("amd64", "arm64")) {
+        $packageSidecar = Join-Path $absoluteReleaseDir "mcp-center-$Version-linux-$arch.deb.sha256"
+        if (Test-Path $packageSidecar) { Remove-Item -Force $packageSidecar }
+    }
+
     if ($env:OS -eq "Windows_NT") {
         $smokeArch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "amd64" }
         $smokeBinary = Join-Path $releaseDir "mcp-center-$Version-windows-$smokeArch.exe"
@@ -117,6 +143,8 @@ try {
         source_commits = [ordered]@{
             mcp_center = $commit
             mcp_center_core = $coreCommit
+            wails_desktop_kit_packaging = $kitPackagingCommit
+            wails_desktop_kit_packaging_tag = $expectedKitTag
         }
         module_dependencies = [ordered]@{
             wails_desktop_kit = [ordered]@{

@@ -102,3 +102,38 @@ go build -mod=vendor ./cmd/mcp-center
 - Center 与 Core 目前都没有配置 Git remote，因此正式版本仍以本地 tag + 本地发布目录为准。
 - Core 继续作为独立项目维护，不合并进 Center。
 - 不修改 ADM；未来由 ADM 方自行决定如何接入 Core。
+
+## Linux Debian 安装与开机自启
+
+本次发布同时生成 AMD64 和 ARM64 的 .deb 安装包：
+
+    mcp-center-<version>-linux-amd64.deb
+    mcp-center-<version>-linux-arm64.deb
+
+由 Wails Desktop Kit 通用 systemd 打包能力生成，manifest 记录 Kit packaging
+源代码 Git commit；不依赖 GTK、WebKit 或其他桌面组件。
+
+Debian 12 安装示例：
+
+    sudo apt install ./mcp-center-v0.1.1-linux-amd64.deb
+    systemctl status mcp-center
+    journalctl -u mcp-center -f
+
+安装到 /usr/bin/mcp-center；systemd unit 在
+/lib/systemd/system/mcp-center.service；数据在
+/var/lib/mcp-center（0700），安装时创建独立低权限 mcp-center 用户。
+首次安装自动 enable --now，异常退出会重启。默认监听 0.0.0.0:8610。
+
+升级：sudo apt install ./mcp-center-新版本-linux-amd64.deb。
+如果服务原本运行则自动重新启动；不影响持久化业务数据。
+
+卸载：sudo apt remove mcp-center。停止并禁用服务，保留
+/var/lib/mcp-center 下的账号、配置、数据和密钥；purge 不删除业务数据。
+如果用户确实要清空，需要单独确认并手动清理。
+
+修改启动参数可使用 systemctl edit mcp-center 建立 drop-in override；
+之后执行 systemctl daemon-reload 和 systemctl restart mcp-center。
+
+首次公网注册管理员之前，请先限制访问端口并配置 HTTPS。
+访问地址白名单检查请求的 Host（访问域名/IP），不检查访客来源 IP，
+也不会代替登录、OAuth Client 或 Token 校验。

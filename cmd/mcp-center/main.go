@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -21,8 +22,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	listen := flag.String("listen", "127.0.0.1:8610", "HTTP listen address")
-	baseURL := flag.String("base-url", "http://127.0.0.1:8610", "External base URL used by OAuth and MCP metadata")
+	listen := flag.String("listen", "0.0.0.0:8610", "HTTP listen address (all network interfaces by default)")
+	baseURL := flag.String("base-url", "", "Optional canonical public base URL for OAuth metadata (default: localhost; MCP links use the current request address)")
 	dataDir := flag.String("data-dir", defaultDataDir, "Persistent data directory")
 	showVersion := flag.Bool("version", false, "Print version and exit")
 	flag.Parse()
@@ -41,14 +42,23 @@ func main() {
 		return
 	}
 
+	autoBaseURL := *baseURL == ""
+	if autoBaseURL {
+		*baseURL, err = localBaseURLForListen(*listen)
+		if err != nil {
+			log.Fatalf("invalid --listen: %v", err)
+		}
+	}
+
 	assets, err := mcpcenterapp.Assets()
 	if err != nil {
 		log.Fatalf("load web assets: %v", err)
 	}
 	app, err := server.New(server.Config{
-		DataDir: *dataDir,
-		BaseURL: *baseURL,
-		Assets:  assets,
+		DataDir:     *dataDir,
+		BaseURL:     *baseURL,
+		AutoBaseURL: autoBaseURL,
+		Assets:      assets,
 	})
 	if err != nil {
 		log.Fatalf("create MCP Center: %v", err)
@@ -68,7 +78,11 @@ func main() {
 	}
 	fmt.Println()
 	fmt.Printf("MCP Center listening on http://%s\n", listener.Addr())
-	fmt.Printf("External base URL: %s\n", app.BaseURL())
+	if !autoBaseURL {
+		fmt.Printf("Canonical OAuth Base URL: %s\n", app.BaseURL())
+	} else {
+		fmt.Println("Access locally or with any server IP/domain at the listening port.")
+	}
 	fmt.Printf("Data directory: %s\n", *dataDir)
 
 	<-ctx.Done()
@@ -81,4 +95,12 @@ func defaultDataDir() (string, error) {
 		return "", fmt.Errorf("resolve user config directory: %w", err)
 	}
 	return filepath.Join(root, "mcp-center"), nil
+}
+
+func localBaseURLForListen(listen string) (string, error) {
+	_, port, err := net.SplitHostPort(listen)
+	if err != nil || port == "" {
+		return "", fmt.Errorf("listen address must include a port: %q", listen)
+	}
+	return "http://127.0.0.1:" + port, nil
 }

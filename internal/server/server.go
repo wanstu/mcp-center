@@ -27,9 +27,10 @@ import (
 const sessionCookie = "mcp_center_session"
 
 type Config struct {
-	DataDir string
-	BaseURL string
-	Assets  fs.FS
+	DataDir     string
+	BaseURL     string
+	AutoBaseURL bool // Use the incoming request host for console MCP links.
+	Assets      fs.FS
 }
 
 type App struct {
@@ -42,6 +43,7 @@ type App struct {
 	settings        *settingsstore.Store
 	assets          fs.FS
 	baseURL         string
+	baseURLExplicit bool
 	dataDir         string
 	secure          bool
 
@@ -115,7 +117,7 @@ func New(cfg Config) (*App, error) {
 	return &App{
 		core: coreService, access: accessService, account: accounts, oauth: oauthService, audit: auditLog,
 		upstreamSecrets: upstreamSecrets, settings: settingsService,
-		assets: cfg.Assets, baseURL: base, dataDir: cfg.DataDir, secure: strings.HasPrefix(base, "https://"),
+		assets: cfg.Assets, baseURL: base, baseURLExplicit: strings.TrimSpace(cfg.BaseURL) != "" && !cfg.AutoBaseURL, dataDir: cfg.DataDir, secure: strings.HasPrefix(base, "https://"),
 		proxies:    map[string]http.Handler{},
 		oauthTests: map[string]*oauthSelfTest{},
 	}, nil
@@ -192,7 +194,7 @@ func (a *App) Handler() http.Handler {
 	static := http.FileServer(http.FS(a.assets))
 	mux.Handle("/", static)
 
-	return a.securityHeaders(a.cors(mux))
+	return a.securityHeaders(a.hostWhitelist(a.cors(mux)))
 }
 
 func (a *App) ListenAndServe(ctx context.Context, listen string) (*http.Server, net.Listener, error) {

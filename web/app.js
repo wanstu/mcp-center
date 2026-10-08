@@ -12,7 +12,7 @@ function clearError(node){node.textContent='';node.classList.add('hidden')}
 const mockData={mcps:[
 {id:'mcp_demo_adm',name:'pj-adm',transport:'streamable-http',auth_mode:'none',endpoint:'http://127.0.0.1:8001/mcp',default_include_in_environment:true},
 {id:'mcp_demo_db',name:'wm-test-db',transport:'stdio',auth_mode:'none',executable:'mysql-mcp',args:['--readonly'],default_include_in_environment:false}
-],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},systemSettings:{audit_retention_days:30,oauth_disabled:false},credentials:[],oauthClients:[],upstreamSecrets:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
+],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},systemSettings:{audit_retention_days:30,oauth_disabled:false,host_whitelist_enabled:false,allowed_hosts:[]},credentials:[],oauthClients:[],upstreamSecrets:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
 
 async function api(path,options={}){
   if(state.mock)return mockApi(path,options);
@@ -932,6 +932,8 @@ async function loadSystemSettings(){
   const result=await api('/api/settings');
   state.systemSettings=result.settings||{audit_retention_days:30,oauth_disabled:false};
   el('settings-audit-retention').value=state.systemSettings.audit_retention_days??30;
+  el('settings-host-whitelist-enabled').checked=Boolean(state.systemSettings.host_whitelist_enabled);
+  el('settings-allowed-hosts').value=(state.systemSettings.allowed_hosts||[]).join('\n');
   renderOAuthServiceState();
 }
 async function saveSystemSettings(){
@@ -942,10 +944,28 @@ async function saveSystemSettings(){
   try{
     const result=await api('/api/settings',{method:'PUT',body:JSON.stringify({audit_retention_days:days,oauth_disabled:oauthDisabled})});
     state.systemSettings=result.settings;
+    el('settings-allowed-hosts').value=(state.systemSettings.allowed_hosts||[]).join('\n');
     renderOAuthServiceState();
     await Promise.all([loadAuditSummary(),loadAudit().catch(()=>{}),loadOAuth().catch(()=>{})]);
     toast('服务策略已保存');
   }catch(error){showError(el('settings-system-error'),error)}
+}
+async function saveNetworkSettings(){
+  const errorNode=el('settings-network-error');
+  clearError(errorNode);
+  const enabled=el('settings-host-whitelist-enabled').checked;
+  const allowedHosts=[...new Set(el('settings-allowed-hosts').value.split(/[\n,，]/).map(x=>x.trim()).filter(Boolean))];
+  if(enabled&&!allowedHosts.length){showError(errorNode,'开启白名单时至少填写一个域名或 IP');return}
+  if(enabled&&!allowedHosts.some(x=>x.toLowerCase()===location.hostname.toLowerCase())){
+    showError(errorNode,'先将当前访问地址 '+location.hostname+' 加入白名单，以免保存后无法继续管理');
+    return;
+  }
+  try{
+    const result=await api('/api/settings',{method:'PUT',body:JSON.stringify({host_whitelist_enabled:enabled,allowed_hosts:allowedHosts})});
+    state.systemSettings=result.settings;
+    el('settings-allowed-hosts').value=(state.systemSettings.allowed_hosts||[]).join('\n');
+    toast('访问地址白名单已保存，立即生效');
+  }catch(error){showError(errorNode,error)}
 }
 async function loadUpstreamSecrets(){
   const result=await api('/api/upstream-secrets');
@@ -1161,4 +1181,5 @@ el('clear-audit').onclick=clearAudit;
 el('audit-search').addEventListener('input',renderAudit);
 el('change-password').onclick=changePassword;
 el('save-system-settings').onclick=saveSystemSettings;
+el('save-network-settings').onclick=saveNetworkSettings;
 bootstrap();

@@ -56,7 +56,7 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 
 ```powershell
 go test ./...
-go run ./cmd/mcp-center --listen 127.0.0.1:8610 --base-url http://127.0.0.1:8610
+go run ./cmd/mcp-center
 ```
 
 浏览器访问：
@@ -64,6 +64,12 @@ go run ./cmd/mcp-center --listen 127.0.0.1:8610 --base-url http://127.0.0.1:8610
 ```text
 http://127.0.0.1:8610/
 ```
+
+默认监听 `0.0.0.0:8610`，无需配置域名或 IP；可通过 `http://<服务器IP>:8610/` 或解析到服务器的域名直接访问（需确保防火墙允许端口）。
+
+在 **设置 → 访问地址白名单** 可以单独启用域名/IP 白名单，默认关闭。这里检查请求访问的 **Host 域名/IP**，不是客户端来源 IP；白名单每行一个域名或服务器 IP，不包含端口/协议，保存后立即生效。登录与 MCP 访问密钥认证仍会独立执行。
+
+外部 MCP 链接默认跟随当前访问控制台所使用的地址。只有需要对外提供固定的 OAuth 颁发者地址时，才建议使用 `--base-url https://mcp.example.com` 明确指定公开的 HTTPS 地址。
 
 查看当前版本：
 

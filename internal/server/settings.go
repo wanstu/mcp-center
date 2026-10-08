@@ -37,8 +37,10 @@ func (a *App) handleSettingsGet(w http.ResponseWriter, _ *http.Request) {
 
 func (a *App) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		AuditRetentionDays *int  `json:"audit_retention_days,omitempty"`
-		OAuthDisabled      *bool `json:"oauth_disabled,omitempty"`
+		AuditRetentionDays   *int      `json:"audit_retention_days,omitempty"`
+		OAuthDisabled        *bool     `json:"oauth_disabled,omitempty"`
+		HostWhitelistEnabled *bool     `json:"host_whitelist_enabled,omitempty"`
+		AllowedHosts         *[]string `json:"allowed_hosts,omitempty"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -54,6 +56,12 @@ func (a *App) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if input.OAuthDisabled != nil {
 		current.OAuthDisabled = *input.OAuthDisabled
+	}
+	if input.HostWhitelistEnabled != nil {
+		current.HostWhitelistEnabled = *input.HostWhitelistEnabled
+	}
+	if input.AllowedHosts != nil {
+		current.AllowedHosts = *input.AllowedHosts
 	}
 	values, err := a.settings.Update(current)
 	if err != nil {

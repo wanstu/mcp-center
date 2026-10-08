@@ -173,12 +173,12 @@
           <div class="panel-head"><div><h2>MCP 外部接入地址</h2><p>同一个 MCP 同时支持 Name 地址和稳定的 ID 地址；Name 地址更易读，改名后会变化。</p></div><span id="connection-base-status" class="status">读取中</span></div>
           <div class="connection-base-row">
             <div>
-              <span class="muted">Public Base URL</span>
+              <span class="muted">当前访问地址（可直接用于 MCP 接入）</span>
               <code id="connection-base-url">读取中…</code>
             </div>
             <button id="copy-base-url" class="button ghost small">复制 Base URL</button>
           </div>
-          <div id="connection-loopback-warning" class="notice hidden">当前 Base URL 是本机地址，只能在本机访问。需要外部接入时，请以公网域名启动 MCP Center，例如 <code>--base-url https://mcp.example.com</code>，并由反向代理转发到 MCP Center。</div>
+          <div id="connection-loopback-warning" class="notice hidden">当前复制的是本机地址。如需其他设备访问，请先用服务器的局域网 IP 或域名打开本控制台，再复制 MCP 地址。默认监听所有网卡。</div>
           <div id="connection-endpoints" class="connection-endpoints"></div>
           <div id="connection-endpoints-empty" class="empty hidden">还没有 MCP 服务，添加 MCP 后会在这里生成外部接入地址。</div>
         </div>
@@ -266,7 +266,7 @@
           <div class="setting"><div><strong>Listen Address</strong><span id="settings-listen-address">读取中…</span></div><code>--listen</code></div>
           <div class="setting"><div><strong>External Base URL</strong><span id="settings-base-url">读取中…</span></div><code>--base-url</code></div>
           <div class="setting"><div><strong>Data Directory</strong><span id="settings-data-dir">读取中…</span></div><code>--data-dir</code></div>
-          <div id="settings-base-url-warning" class="notice hidden">当前 Base URL 是 loopback 地址，只适合本机客户端；公网部署时请使用 HTTPS 域名并通过 <code>--base-url</code> 指定。</div>
+          <div id="settings-base-url-warning" class="notice hidden">当前地址为本机地址，其他设备可直接通过服务器 IP:8610 访问；如使用 OAuth 对外授权，建议设置固定的 HTTPS <code>--base-url</code>。</div>
         </div>
         <div class="panel">
           <div class="panel-head">
@@ -281,6 +281,18 @@
           </div>
           <p id="settings-system-error" class="form-error hidden"></p>
           <div class="row end"><button id="save-system-settings" class="button primary">保存服务策略</button></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div><h2>访问地址白名单</h2><p>默认关闭：任何域名或 IP 都可以用于访问；这是访问地址检查，不是访客来源 IP 过滤。</p></div></div>
+          <div class="form-grid">
+            <label class="channel-card span-2"><span><strong>启用域名 / IP 白名单</strong><small>默认关闭。开启后，只允许使用下方域名或服务器 IP 作为访问地址；不限制访问者的来源 IP。保存后立即生效。</small></span><input id="settings-host-whitelist-enabled" type="checkbox"></label>
+            <label class="field span-2">允许访问的域名 / IP
+              <textarea id="settings-allowed-hosts" rows="3" placeholder="例如：192.168.1.20&#10;localhost&#10;mcp.example.com"></textarea>
+              <small>一行一个地址，不含协议、端口和路径。开启时至少填写一项，保存前请确认包含你当前正在使用的访问地址，以免无法再打开控制台。</small>
+            </label>
+          </div>
+          <p id="settings-network-error" class="form-error hidden"></p>
+          <div class="row end"><button id="save-network-settings" class="button primary">保存白名单设置</button></div>
         </div>
         <div class="panel">
           <div class="panel-head">

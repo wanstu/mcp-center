@@ -365,21 +365,24 @@
     </form>
   </dialog>
 
-  <dialog id="import-dialog" class="dialog">
+  <dialog id="import-dialog" class="dialog import-dialog">
     <form id="import-form" method="dialog">
-      <div class="dialog-head"><div><h2>导入 MCP</h2><p>支持 MCP Center 格式和常见的 mcpServers JSON。导入会先完整预检，失败时不会写入半份配置。</p></div><button type="button" class="icon-button" data-action="close-import-dialog">×</button></div>
+      <div class="dialog-head"><div><h2>导入 MCP</h2><p>参照 ADM：识别多个客户端配置，先预览并勾选，再确认导入。预览不会修改任何 MCP。</p></div><button type="button" class="icon-button" data-action="close-import-dialog">×</button></div>
       <div class="form-grid">
-        <label class="field">格式<select id="import-format"><option value="auto">自动识别</option><option value="mcp-center">MCP Center</option><option value="mcpServers">mcpServers</option></select></label>
+        <label class="field">来源格式<select id="import-format"><option value="auto">自动识别（推荐）</option><option value="mcp-center">MCP Center</option><option value="mcpServers">通用 mcpServers</option><option value="opencode">OpenCode</option><option value="workbuddy">WorkBuddy</option><option value="codex-plugin">Codex / 插件配置</option><option value="claude-code">Claude Code</option><option value="mcphub">MCPHub</option></select></label>
         <label class="field">名称冲突<select id="import-conflict"><option value="error">报错并停止</option><option value="skip">跳过已存在</option><option value="update_by_name">按名称更新</option></select></label>
+        <label class="field span-2">Claude Code 源项目路径（多项目时必填）<input id="import-source-scope" placeholder="例如 D:/projects/example，不填则自动识别单项目"></label>
         <div class="import-file-row span-2">
-          <label class="button import-file-button">选择 JSON 文件<input id="import-file" type="file" accept=".json,application/json" hidden></label>
-          <span id="import-file-name" class="muted">也可以直接在下面粘贴 JSON</span>
+          <label class="button import-file-button">选择 JSON / JSONC 文件<input id="import-file" type="file" accept=".json,.jsonc,application/json" hidden></label>
+          <span id="import-file-name" class="muted">也可以直接粘贴客户端 MCP 配置</span>
         </div>
-        <label class="field span-2">配置 JSON<textarea id="import-content" rows="16" spellcheck="false" placeholder='{"mcpServers":{"example":{"url":"https://example.com/mcp"}}}'></textarea></label>
+        <label class="field span-2">配置 JSON / JSONC<textarea id="import-content" rows="11" spellcheck="false" placeholder='{"mcpServers":{"example":{"url":"https://example.com/mcp"}}}'></textarea></label>
+        <label class="check span-2"><input type="checkbox" id="import-convert-literals" checked>将 Header / env 明文值转换为变量引用（明文不会写入 MCP 配置）</label>
       </div>
-      <div class="notice">安全要求：导入 Header / env 中的密钥必须使用环境变量引用，例如 <code>${TOKEN}</code>；实际值可在“设置 → 上游密钥变量”中加密保存。</div>
+      <div class="notice">安全提示：预览不会显示密钥值。转换后需要到“设置 → 上游密钥变量”为生成的变量名填写原值，否则对应 MCP 可能暂时无法连接。</div>
+      <div id="import-preview" class="import-preview hidden" aria-live="polite"></div>
       <p id="import-error" class="form-error hidden"></p>
-      <div class="dialog-actions"><button type="button" class="button" data-action="close-import-dialog">取消</button><button type="submit" class="button primary">预检并导入</button></div>
+      <div class="dialog-actions"><button type="button" class="button" data-action="close-import-dialog">取消</button><button id="import-submit" type="submit" class="button primary">预览配置</button></div>
     </form>
   </dialog>
 

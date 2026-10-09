@@ -7,3 +7,17 @@
 .password-visibility-toggle{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;color:var(--muted);padding:6px 10px;border-radius:6px;font-size:12px;line-height:1.25;cursor:pointer}
 .password-visibility-toggle:hover{color:var(--primary);background:var(--subtle)}
 .password-visibility-toggle:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+/* MCP import preview: readable candidate list inside a scrollable dialog. */
+.import-dialog{width:min(850px,96vw);max-height:92vh;overflow:auto}
+.import-preview{margin-top:16px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--subtle);display:grid;gap:9px}
+.import-preview>strong{font-size:13px}
+.import-preview p{margin:2px 0;font-size:11px}
+.import-candidates{display:grid;gap:8px;max-height:250px;overflow:auto}
+.import-candidate{padding:10px;background:var(--panel);border:1px solid var(--border);border-radius:9px;display:grid;gap:6px;cursor:pointer}
+.import-candidate-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.import-candidate-head strong{font-size:12px}
+.import-candidate-head small{font-size:11px;color:var(--muted)}
+.import-issue{color:var(--warning);line-height:1.4;word-break:break-word}
+.import-issue.error{color:var(--danger)}
+.import-ref{color:var(--muted);font-family:Consolas,monospace;font-size:11px;overflow-wrap:anywhere}

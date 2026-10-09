@@ -1,5 +1,5 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,selectedToolMCPID:'',toolParamMode:'form',toolHistory:new Map(),connectionInfo:null,editingMCP:null,accessSettings:null,systemSettings:null,credentials:[],oauthClients:[],oauthTestID:'',oauthTestStatus:'',oauthTestAuthorizeURL:'',upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,selectedToolMCPID:'',toolParamMode:'form',toolHistory:new Map(),connectionInfo:null,editingMCP:null,importPreview:null,importPreviewSignature:'',accessSettings:null,systemSettings:null,credentials:[],oauthClients:[],oauthTestID:'',oauthTestStatus:'',oauthTestAuthorizeURL:'',upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
 const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
@@ -61,13 +61,22 @@ async function mockApi(path,options){
   if(path==='/api/access/credentials'&&method==='POST'){const input=JSON.parse(options.body),secret='mcp_mock_'+Date.now(),item={id:'cred_'+Date.now(),secret_prefix:secret.slice(0,12),created_at:new Date().toISOString(),updated_at:new Date().toISOString(),last_used_at:null,...input};mockData.credentials.push(item);return {credential:item,secret}}
   const cred=path.match(/^\/api\/access\/credentials\/([^/]+)$/);
   if(cred){const id=cred[1];if(method==='DELETE'){mockData.credentials=mockData.credentials.filter(x=>x.id!==id);return {ok:true}}if(method==='PUT'){const input=JSON.parse(options.body),i=mockData.credentials.findIndex(x=>x.id===id);mockData.credentials[i]={...mockData.credentials[i],...input,updated_at:new Date().toISOString()};return {credential:mockData.credentials[i]}}}
+  if(path==='/api/mcps/import/preview'&&method==='POST'){
+    const request=JSON.parse(options.body),doc=JSON.parse(request.content),source=doc.mcpServers||doc.servers||doc.mcp?.servers||doc;
+    const candidates=Object.entries(source).map(([name,item])=>({
+      name,transport:item.url?'streamable-http':'stdio',auth_mode:item.headers?'headers':'none',
+      endpoint_configured:Boolean(item.url),existing_mcp_id:mockData.mcps.find(x=>x.name.toLowerCase()===name.toLowerCase())?.id||'',
+      errors:[],warnings:[],reference_requirements:[]
+    }));
+    return {format:request.format==='auto'?'mcpServers':request.format,candidates};
+  }
   if(path==='/api/mcps/import'&&method==='POST'){
     const request=JSON.parse(options.body),doc=JSON.parse(request.content),configs=[];
     if(doc.mcpServers){for(const [name,item] of Object.entries(doc.mcpServers)){configs.push(item.url?{name,transport:'streamable-http',auth_mode:item.headers?'headers':'none',endpoint:item.url,header_refs:item.headers||undefined,health_policy:{}}:{name,transport:'stdio',auth_mode:'none',executable:item.command,args:item.args||[],env_refs:item.env||undefined,health_policy:{}})}}
     else if(Array.isArray(doc.mcps))configs.push(...doc.mcps);
     else throw new Error('无法识别导入格式');
     let added=0,updated=0,skipped=0;
-    for(const cfg of configs){const i=mockData.mcps.findIndex(x=>x.name.toLowerCase()===String(cfg.name||'').toLowerCase());if(i>=0){if(request.conflict==='error')throw new Error('MCP 已存在: '+cfg.name);if(request.conflict==='skip'){skipped++;continue}mockData.mcps[i]={...mockData.mcps[i],...cfg};updated++;continue}mockData.mcps.push({id:'mcp_'+Date.now()+'_'+added,...cfg});added++}
+    for(const cfg of configs){if(request.selected_names&&!request.selected_names.includes(cfg.name))continue;const i=mockData.mcps.findIndex(x=>x.name.toLowerCase()===String(cfg.name||'').toLowerCase());if(i>=0){if(request.conflict==='error')throw new Error('MCP 已存在: '+cfg.name);if(request.conflict==='skip'){skipped++;continue}mockData.mcps[i]={...mockData.mcps[i],...cfg};updated++;continue}mockData.mcps.push({id:'mcp_'+Date.now()+'_'+added,...cfg});added++}
     return {added,updated,skipped,items:[]};
   }
   if(path==='/api/runtime'&&method==='GET')return {runtime:mockData.mcps.map(m=>mockData.runtime[m.id]||{mcp_id:m.id,state:'disconnected',tool_count:0})};
@@ -371,8 +380,25 @@ async function disconnectMCP(id){
   }catch(error){toast('断开失败：'+error.message)}
 }
 
+function importRequestInput(){
+  return {
+    format:el('import-format').value,
+    conflict:el('import-conflict').value,
+    source_scope:el('import-source-scope').value.trim(),
+    content:el('import-content').value,
+    convert_literals:el('import-convert-literals').checked
+  };
+}
+function resetImportPreview(){
+  state.importPreview=null;
+  state.importPreviewSignature='';
+  el('import-preview').classList.add('hidden');
+  el('import-preview').replaceChildren();
+  el('import-submit').textContent='预览配置';
+}
 function openImportDialog(){
   clearError(el('import-error'));
+  resetImportPreview();
   if(!el('import-content').value.trim())el('import-content').value='{'+'\n  "mcpServers": {'+'\n    "example": {'+'\n      "url": "https://example.com/mcp"'+'\n    }'+'\n  }'+'\n}';
   el('import-dialog').showModal();
 }
@@ -381,30 +407,103 @@ async function loadImportFile(event){
   const file=event.target.files?.[0];
   if(!file)return;
   if(file.size>2*1024*1024){
-    showError(el('import-error'),'JSON 文件不能超过 2 MB');
+    showError(el('import-error'),'配置文件不能超过 2 MB');
     event.target.value='';
     return;
   }
   try{
-    const content=await file.text();
-    JSON.parse(content);
-    el('import-content').value=content;
+    // JSONC and client-specific wrappers are parsed and validated by server.
+    el('import-content').value=await file.text();
     el('import-format').value='auto';
     el('import-file-name').textContent=file.name+' · '+Math.max(1,Math.round(file.size/1024))+' KB';
+    resetImportPreview();
   }catch(error){
-    showError(el('import-error'),'无法读取 JSON 文件：'+error.message);
+    showError(el('import-error'),'无法读取文件：'+error.message);
     event.target.value='';
   }
 }
+function renderImportPreview(preview){
+  const target=el('import-preview');
+  target.replaceChildren();
+  const title=document.createElement('strong');
+  title.textContent='预览结果：'+preview.candidates.length+' 个 MCP · 识别格式 '+preview.format+(preview.source_scope?' · '+preview.source_scope:'');
+  target.append(title);
+  const list=document.createElement('div');
+  list.className='import-candidates';
+  for(const candidate of preview.candidates){
+    const card=document.createElement('label');
+    card.className='import-candidate';
+    const head=document.createElement('span');
+    head.className='import-candidate-head';
+    const checkbox=document.createElement('input');
+    checkbox.type='checkbox';
+    checkbox.className='import-select';
+    checkbox.value=candidate.name;
+    checkbox.disabled=Boolean(candidate.errors?.length);
+    checkbox.checked=!checkbox.disabled;
+    const name=document.createElement('strong');
+    name.textContent=candidate.name;
+    const detail=document.createElement('small');
+    detail.textContent=[candidate.transport||'待修正',candidate.existing_mcp_id?'已存在': '新建',candidate.auth_mode==='headers'?'Header 认证':''].filter(Boolean).join(' · ');
+    head.append(checkbox,name,detail);
+    card.append(head);
+    for(const problem of (candidate.errors||[])){
+      const issue=document.createElement('small');
+      issue.className='import-issue error';
+      issue.textContent='错误：'+(problem.field_path?problem.field_path+'：':'')+problem.message;
+      card.append(issue);
+    }
+    for(const problem of (candidate.warnings||[])){
+      const issue=document.createElement('small');
+      issue.className='import-issue';
+      issue.textContent='提示：'+(problem.field_path?problem.field_path+'：':'')+problem.message;
+      card.append(issue);
+    }
+    for(const requirement of (candidate.reference_requirements||[])){
+      const item=document.createElement('small');
+      item.className='import-ref';
+      item.textContent='待配置密钥变量：'+requirement.reference_name;
+      card.append(item);
+    }
+    list.append(card);
+  }
+  target.append(list);
+  const hint=document.createElement('p');
+  hint.className='muted';
+  hint.textContent='仅会导入勾选的项目；包含错误的 MCP 不能选中。冲突按上方策略处理。';
+  target.append(hint);
+  target.classList.remove('hidden');
+  el('import-submit').textContent='确认导入所选';
+}
 async function importMCPs(event){
-  event.preventDefault();clearError(el('import-error'));
-  const payload={format:el('import-format').value,conflict:el('import-conflict').value,content:el('import-content').value};
+  event.preventDefault();
+  clearError(el('import-error'));
+  const payload=importRequestInput();
+  const signature=JSON.stringify(payload);
+  const submit=el('import-submit');
+  submit.disabled=true;
   try{
-    const result=await api('/api/mcps/import',{method:'POST',body:JSON.stringify(payload)});
-    state.health.clear();state.tools.clear();el('import-dialog').close();await loadMCPs();
+    if(!state.importPreview||signature!==state.importPreviewSignature){
+      const preview=await api('/api/mcps/import/preview',{method:'POST',body:JSON.stringify(payload)});
+      if(!preview.candidates?.length)throw new Error('没有可导入的 MCP');
+      state.importPreview=preview;
+      state.importPreviewSignature=signature;
+      renderImportPreview(preview);
+      toast('预览完成：请选择需要导入的 MCP');
+      return;
+    }
+    const selected=[...el('import-preview').querySelectorAll('.import-select:checked')].map(node=>node.value);
+    if(!selected.length)throw new Error('请至少选择一个有效的 MCP');
+    const result=await api('/api/mcps/import',{method:'POST',body:JSON.stringify({...payload,selected_names:selected})});
+    state.health.clear();state.tools.clear();state.runtime.clear();
+    el('import-dialog').close();
+    resetImportPreview();
+    await loadMCPs();
     toast('导入完成：新增 '+result.added+'，更新 '+result.updated+'，跳过 '+result.skipped);
   }catch(error){showError(el('import-error'),error)}
+  finally{submit.disabled=false}
 }
+
 async function exportMCPs(format){
   if(state.mock){
     let doc;
@@ -1161,6 +1260,9 @@ document.addEventListener('click',event=>{
   if(menu?.hasAttribute('open')&&!menu.contains(event.target))menu.removeAttribute('open');
 });
 el('import-form').addEventListener('submit',importMCPs);
+el('import-form').addEventListener('input',event=>{if(!event.target.closest('#import-preview'))resetImportPreview()});
+el('import-form').addEventListener('change',event=>{if(!event.target.closest('#import-preview'))resetImportPreview()});
+
 el('import-file').addEventListener('change',loadImportFile);
 el('mcp-search').addEventListener('input',renderMCPs);
 el('mcp-status-filter').addEventListener('change',renderMCPs);

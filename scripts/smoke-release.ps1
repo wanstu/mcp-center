@@ -78,8 +78,30 @@ function Assert-EchoTool {
     }
 }
 
+# Verify the final *packaged* executable's CLI, rather than only go run
+# or unit-test help strings. Help must exit without creating a listener.
+function Assert-CLIHelp([string]$Executable) {
+    foreach ($argsSet in @(@("-h"), @("--help"), @("help"), @("serve", "--help"))) {
+        $output = (& $Executable @argsSet | Out-String)
+        if ($LASTEXITCODE -ne 0) {
+            throw "CLI help failed: $($argsSet -join ' ')"
+        }
+        foreach ($expected in @(
+            "mcp-center status", "mcp-center doctor",
+            "mcp-center set-port PORT", "mcp-center autostart on|off",
+            "--listen ADDRESS", "--data-dir PATH", "--base-url URL"
+        )) {
+            if (-not $output.Contains($expected)) {
+                throw "CLI help '$($argsSet -join ' ')' does not include $expected"
+            }
+        }
+    }
+    Write-Host "CLI help (-h / --help / help / serve --help) passed."
+}
+
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $binary = (Resolve-Path $BinaryPath).Path
+Assert-CLIHelp -Executable $binary
 $tempRoot = Join-Path $repoRoot ("tmp\release-smoke-" + [Guid]::NewGuid().ToString("N"))
 $helperPath = Join-Path $tempRoot "mcp-center-smoke-upstream.exe"
 $oauthHelperPath = Join-Path $tempRoot "mcp-center-smoke-oauth.exe"

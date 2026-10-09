@@ -54,7 +54,7 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - 工具测试参数助手：从 inputSchema 自动生成最小 JSON 示例，并提供 Form / JSON 双模式
 - 工具测试状态按 MCP + Tool 保留参数、模式和最后一次运行结果，切换后可恢复
 
-正式版本：`v0.1.1`；当前升级候选版：`v0.1.2-rc.3`。使用统一 Kit `v0.11.3`，并修复 `mcp-center -h`、`--help` 及 `help` 命令帮助。
+当前正式发布目标：`v0.1.2`。Kit Go Module 与 Linux Debian 打包器统一使用 `v0.11.3`；Linux CLI 支持独立的状态、诊断、启停、自启动及端口管理。
 
 ## 开源许可证
 
@@ -99,7 +99,7 @@ go run ./cmd/mcp-center --version
 RC / Release 构建：
 
 ```powershell
-./scripts/build-release.ps1 -Version v0.1.2-rc.2
+./scripts/build-release.ps1 -Version v0.1.2
 ```
 
 详见 `docs/RELEASE.md`。

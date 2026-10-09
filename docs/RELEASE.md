@@ -12,7 +12,7 @@
 PowerShell：
 
 ```powershell
-./scripts/build-release.ps1 -Version v0.1.1
+./scripts/build-release.ps1 -Version v0.1.2
 ```
 
 产物写入：
@@ -62,6 +62,7 @@ Windows 发布机会使用最终构建出的 Windows 二进制运行 `scripts/sm
 - HTTP MCP：`tools/list + tools/call`
 - OAuth：Authorization Code + PKCE、Bearer MCP 访问、Refresh、Revoke
 - stdio MCP：`tools/list + tools/call`
+- 对最终构建出的可执行文件验证 `-h`、`--help`、`help`、`serve --help`，确保帮助中包含服务管理和端口选项。
 
 OAuth smoke 使用独立 Go verifier 进程，避免 PowerShell 子脚本提前结束发布流程。
 
@@ -72,13 +73,13 @@ OAuth smoke 使用独立 Go verifier 进程，避免 PowerShell 子脚本提前�
 Windows：
 
 ```powershell
-./dist/v0.1.0/mcp-center-v0.1.0-windows-amd64.exe --version
+./dist/v0.1.2/mcp-center-v0.1.2-windows-amd64.exe --version
 ```
 
 启动：
 
 ```powershell
-./dist/v0.1.0/mcp-center-v0.1.0-windows-amd64.exe --listen 127.0.0.1:8610 --base-url http://127.0.0.1:8610
+./dist/v0.1.2/mcp-center-v0.1.2-windows-amd64.exe --listen 127.0.0.1:8610 --base-url http://127.0.0.1:8610
 ```
 
 检查：
@@ -92,8 +93,8 @@ GET /.well-known/oauth-authorization-server
 源码包离线验证：
 
 ```powershell
-Expand-Archive ./dist/v0.1.0/mcp-center-v0.1.0-source.zip ./source
-cd ./source/mcp-center-v0.1.0-source/mcp-center
+Expand-Archive ./dist/v0.1.2/mcp-center-v0.1.2-source.zip ./source
+cd ./source/mcp-center-v0.1.2-source/mcp-center
 $env:GOPROXY="off"
 go test -mod=vendor ./...
 go build -mod=vendor ./cmd/mcp-center
@@ -127,14 +128,13 @@ MCP Center 与独立的 MCP Center Core 均使用 **BSD 3-Clause License**，
     mcp-center-<version>-linux-amd64.deb
     mcp-center-<version>-linux-arm64.deb
 
-由 Wails Desktop Kit 通用 systemd 打包能力生成，manifest 记录 Kit packaging
-源代码 Git commit；不依赖 GTK、WebKit 或其他桌面组件。
+由 Wails Desktop Kit `v0.11.3` 通用 systemd 打包能力生成。Go Module 和 Linux 打包器使用同一个固定版本，manifest 记录模块版本及校验和；不依赖 GTK、WebKit 或其他桌面组件。
 
 Debian 12 安装示例：
 
-    sudo apt install ./mcp-center-v0.1.1-linux-amd64.deb
-    systemctl status mcp-center
-    journalctl -u mcp-center -f
+    sudo apt install ./mcp-center-v0.1.2-linux-amd64.deb
+    mcp-center status
+    mcp-center doctor
 
 安装到 /usr/bin/mcp-center；systemd unit 在
 /lib/systemd/system/mcp-center.service；数据在
@@ -148,8 +148,19 @@ Debian 12 安装示例：
 /var/lib/mcp-center 下的账号、配置、数据和密钥；purge 不删除业务数据。
 如果用户确实要清空，需要单独确认并手动清理。
 
-修改启动参数可使用 systemctl edit mcp-center 建立 drop-in override；
-之后执行 systemctl daemon-reload 和 systemctl restart mcp-center。
+管理系统服务不需要直接调用 systemctl：
+
+    mcp-center -h
+    mcp-center status
+    mcp-center doctor
+    sudo mcp-center start
+    sudo mcp-center stop
+    sudo mcp-center restart
+    sudo mcp-center autostart on
+    sudo mcp-center autostart off
+    sudo mcp-center set-port 8620
+
+端口写入 `/etc/default/mcp-center` 并在服务重新启动后生效，升级不覆盖配置。原有 `mcp-center serve --listen 0.0.0.0:8610` 仍支持手动前台启动，但不管理已安装服务。
 
 首次公网注册管理员之前，请先限制访问端口并配置 HTTPS。
 访问地址白名单检查请求的 Host（访问域名/IP），不检查访客来源 IP，

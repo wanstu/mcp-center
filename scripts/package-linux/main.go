@@ -22,7 +22,6 @@ func main() {
 }
 func run() error {
 	version := flag.String("version", "", "version such as v0.1.1-rc.1")
-	kit := flag.String("kit", "../wails-desktop-kit", "path to reusable Kit repository")
 	out := flag.String("out", "", "output directory, default dist/<version>")
 	build := flag.Bool("build", false, "also cross-compile Linux raw binaries from current source")
 	flag.Parse()
@@ -36,26 +35,18 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	kitRoot, err := filepath.Abs(*kit)
+
+	// Always use the exact dependency pinned by this project's go.mod.
+	// This avoids accidentally packaging with an old or dirty sibling Kit checkout.
+	kitVersion := "v0.11.3"
+	cmdVersion := exec.Command("go", "list", "-m", "-f", "{{.Version}}", "github.com/wanstu/wails-desktop-kit")
+	cmdVersion.Dir = root
+	resolvedVersion, err := cmdVersion.Output()
 	if err != nil {
-		return err
+		return fmt.Errorf("resolve Kit module version: %w", err)
 	}
-	if st, e := os.Stat(filepath.Join(kitRoot, "packaging", "linux_systemd.go")); e != nil || !st.Mode().IsRegular() {
-		return fmt.Errorf("Kit systemd packaging is unavailable at %s", kitRoot)
-	}
-	tag := "v0.10.3"
-	resolved := func(args ...string) (string, error) {
-		cmd := exec.Command("git", append([]string{"-C", kitRoot}, args...)...)
-		result, err := cmd.Output()
-		return strings.TrimSpace(string(result)), err
-	}
-	tagCommit, err := resolved("rev-list", "-n", "1", tag)
-	if err != nil || tagCommit == "" {
-		return fmt.Errorf("Kit packaging requires tag %s in %s", tag, kitRoot)
-	}
-	head, err := resolved("rev-parse", "HEAD")
-	if err != nil || head != tagCommit {
-		return fmt.Errorf("Kit packaging requires checkout %s (HEAD %s)", tag, head)
+	if strings.TrimSpace(string(resolvedVersion)) != kitVersion {
+		return fmt.Errorf("Kit module version mismatch: need %s, got %s", kitVersion, strings.TrimSpace(string(resolvedVersion)))
 	}
 	dest := *out
 	if dest == "" {
@@ -89,7 +80,7 @@ func run() error {
 				return fmt.Errorf("missing existing Linux binary %s: %w", raw, err)
 			}
 		}
-		args := []string{"-C", kitRoot, "run", "./cmd/desktopkit", "package", "linux",
+		args := []string{"run", "github.com/wanstu/wails-desktop-kit/cmd/desktopkit", "package", "linux",
 			"--input", raw, "--dist", dest, "--app-name", "mcp-center",
 			"--asset-base", "mcp-center-" + *version, "--package-name", "mcp-center",
 			"--package-version", debVersion, "--arch", arch,
@@ -108,7 +99,7 @@ func run() error {
 		cmd.Dir = root
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		fmt.Printf("Packaging Linux %s systemd .deb via Kit...\n", arch)
+		fmt.Printf("Packaging Linux %s systemd .deb via Kit %s...\n", arch, kitVersion)
 		if err = cmd.Run(); err != nil {
 			return fmt.Errorf("Linux %s .deb: %w", arch, err)
 		}

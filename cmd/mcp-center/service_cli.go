@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/wanstu/wails-desktop-kit/servicecontrol"
 )
 
 const serviceName = "mcp-center.service"
@@ -62,19 +65,10 @@ func runServiceCLI(args []string, out io.Writer) error {
 	}
 }
 
+// Delegate standard Linux service actions to the reusable Kit servicecontrol.
+// Center owns only its application-specific port configuration and diagnostics.
 func controlService(out io.Writer, action string) error {
-	if os.Geteuid() != 0 {
-		return fmt.Errorf("requires root: sudo mcp-center service %s", action)
-	}
-	if _, err := getUnitProperties(); err != nil {
-		return err
-	}
-	result, err := systemctl(action, serviceName)
-	if err != nil {
-		return fmt.Errorf("systemctl %s: %w (%s)", action, err, result)
-	}
-	_, _ = fmt.Fprintf(out, "Service %s: %s\n", serviceName, action)
-	return nil
+	return servicecontrol.Run(context.Background(), serviceName, action, out, os.Stderr)
 }
 
 func systemctl(args ...string) (string, error) {

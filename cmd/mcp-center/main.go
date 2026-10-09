@@ -17,10 +17,11 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "service" {
-		if err := runServiceCLI(os.Args[2:], os.Stdout); err != nil {
+	foregroundArgs, handled, err := dispatchCLI(os.Args[1:], os.Stdout)
+	if handled {
+		if err != nil {
 			fmt.Fprintln(os.Stderr, "mcp-center:", err)
-			os.Exit(1)
+			os.Exit(2)
 		}
 		return
 	}
@@ -33,7 +34,13 @@ func main() {
 	baseURL := flag.String("base-url", "", "Optional canonical public base URL for OAuth metadata (default: localhost; MCP links use the current request address)")
 	dataDir := flag.String("data-dir", defaultDataDir, "Persistent data directory")
 	showVersion := flag.Bool("version", false, "Print version and exit")
-	flag.Parse()
+	if err := flag.CommandLine.Parse(foregroundArgs); err != nil {
+		log.Fatalf("invalid flags: %v", err)
+	}
+	if flag.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "mcp-center: unexpected arguments: %v (run mcp-center --help)\n", flag.Args())
+		os.Exit(2)
+	}
 
 	if *showVersion {
 		info := buildinfo.Current()

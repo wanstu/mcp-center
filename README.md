@@ -54,7 +54,7 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - 工具测试参数助手：从 inputSchema 自动生成最小 JSON 示例，并提供 Form / JSON 双模式
 - 工具测试状态按 MCP + Tool 保留参数、模式和最后一次运行结果，切换后可恢复
 
-当前发布目标：`v0.1.1`（Linux systemd `.deb` 安装与服务自启纳入这一版）。
+正式版本：`v0.1.1`；当前 Kit 统一升级候选版：`v0.1.2-rc.2`。该版使用 Kit `v0.11.3`，包含 Linux 服务 CLI 的完善。
 
 ## 开源许可证
 
@@ -99,7 +99,7 @@ go run ./cmd/mcp-center --version
 RC / Release 构建：
 
 ```powershell
-./scripts/build-release.ps1 -Version v0.1.1
+./scripts/build-release.ps1 -Version v0.1.2-rc.2
 ```
 
 详见 `docs/RELEASE.md`。
@@ -120,6 +120,6 @@ assets.go             Web + Desktop Kit 资源挂载
 ## 依赖与源码分发
 
 - `mcp-center-core` 保持独立项目边界；本地联调通过 `replace ../mcp-center-core` 使用同级源码。
-- `wails-desktop-kit` 的 Go Module 仍使用稳定的 `v0.10.0`；Linux `.deb` 打包独立使用 Kit `v0.10.2`（发布前要求相邻 Kit 工作区处于该 tag），并在 manifest 记录打包器版本与 commit。
+- `wails-desktop-kit` 的 Go Module 和 Linux `.deb` 打包工具统一使用正式 `v0.11.3`。打包直接运行该 Go Module 的 `cmd/desktopkit`，不依赖本地 Kit 工作区或双重版本设置；manifest 记录 Kit module version 和 go.sum 哈希。
 - 正式 Release 会额外生成 `mcp-center-<version>-source.zip`，其中包含 Center、Core 与完整 vendor。
-- source bundle 会在 `GOPROXY=off`、隐藏 Core sibling 的条件下执行 `go test -mod=vendor ./...` 与 `go build -mod=vendor`，确认服务程序可离线复现；重新生成 `.deb` 需要 Kit `v0.10.2` 打包器。
+- source bundle 会在 `GOPROXY=off`、隐藏 Core sibling 的条件下执行 `go test -mod=vendor ./...` 与 `go build -mod=vendor`，确认程序可离线构建。Linux `.deb` 统一使用 Kit `v0.11.3` 的 Go Module 打包器。

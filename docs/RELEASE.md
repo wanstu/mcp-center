@@ -6,7 +6,7 @@
 
 - `mcp-center` 工作区 clean。
 - 同级目录存在并保持 clean 的 `../mcp-center-core`。
-- Go Module 仍使用已发布 Kit `v0.10.0`；Linux Debian 打包要求相邻 Kit 仓库 checkout 到 `v0.10.2`，并且 clean。
+- Go Module 和 Debian 打包器都使用正式 Kit `v0.11.3`，以 `go.mod` 锁定、在 `release-manifest.json` 记录模块版本和校验和。无需切换本地 Kit 仓库，也不会打包未提交的本地 Kit 修改。
 - 发布前必须同时通过 `mcp-center` 与 `mcp-center-core` 的 `go test ./...`。
 
 PowerShell：

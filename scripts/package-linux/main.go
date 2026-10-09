@@ -43,7 +43,7 @@ func run() error {
 	if st, e := os.Stat(filepath.Join(kitRoot, "packaging", "linux_systemd.go")); e != nil || !st.Mode().IsRegular() {
 		return fmt.Errorf("Kit systemd packaging is unavailable at %s", kitRoot)
 	}
-	tag := "v0.10.1"
+	tag := "v0.10.2"
 	resolved := func(args ...string) (string, error) {
 		cmd := exec.Command("git", append([]string{"-C", kitRoot}, args...)...)
 		result, err := cmd.Output()
@@ -98,7 +98,9 @@ func run() error {
 			"--formats", "deb", "--systemd", "--service-name", "mcp-center",
 			"--service-user", "mcp-center", "--service-group", "mcp-center",
 			"--service-data-dir", "/var/lib/mcp-center",
-			"--service-arg=--listen", "--service-arg=0.0.0.0:8610",
+			"--service-environment-file=/etc/default/mcp-center",
+			"--service-env=MCP_CENTER_LISTEN=0.0.0.0:8610",
+			"--service-arg=--listen", "--service-arg=${MCP_CENTER_LISTEN}",
 			"--service-arg=--data-dir", "--service-arg=/var/lib/mcp-center"}
 		cmd := exec.Command("go", args...)
 		cmd.Dir = root

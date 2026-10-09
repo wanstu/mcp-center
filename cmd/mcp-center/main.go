@@ -17,6 +17,13 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "service" {
+		if err := runServiceCLI(os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "mcp-center:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	defaultDataDir, err := defaultDataDir()
 	if err != nil {
 		log.Fatal(err)

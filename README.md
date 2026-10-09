@@ -103,6 +103,6 @@ assets.go             Web + Desktop Kit 资源挂载
 ## 依赖与源码分发
 
 - `mcp-center-core` 保持独立项目边界；本地联调通过 `replace ../mcp-center-core` 使用同级源码。
-- `wails-desktop-kit` 的 Go Module 仍使用稳定的 `v0.10.0`；Linux `.deb` 打包独立使用 Kit `v0.10.1`（发布前要求相邻 Kit 工作区处于该 tag），并在 manifest 记录打包器版本与 commit。
+- `wails-desktop-kit` 的 Go Module 仍使用稳定的 `v0.10.0`；Linux `.deb` 打包独立使用 Kit `v0.10.2`（发布前要求相邻 Kit 工作区处于该 tag），并在 manifest 记录打包器版本与 commit。
 - 正式 Release 会额外生成 `mcp-center-<version>-source.zip`，其中包含 Center、Core 与完整 vendor。
-- source bundle 会在 `GOPROXY=off`、隐藏 Core sibling 的条件下执行 `go test -mod=vendor ./...` 与 `go build -mod=vendor`，确认服务程序可离线复现；重新生成 `.deb` 需要 Kit `v0.10.1` 打包器。
+- source bundle 会在 `GOPROXY=off`、隐藏 Core sibling 的条件下执行 `go test -mod=vendor ./...` 与 `go build -mod=vendor`，确认服务程序可离线复现；重新生成 `.deb` 需要 Kit `v0.10.2` 打包器。

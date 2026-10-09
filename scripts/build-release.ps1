@@ -35,7 +35,7 @@ try {
     Assert-CleanGitTree $repoRoot "mcp-center"
     Assert-CleanGitTree $coreRoot "mcp-center-core"
     Assert-CleanGitTree $KitRoot "wails-desktop-kit (systemd package helper)"
-    $expectedKitTag = "v0.10.2"
+    $expectedKitTag = "v0.10.3"
     $expectedKitCommit = git -C $KitRoot rev-list -n 1 $expectedKitTag
     if ($LASTEXITCODE -ne 0 -or -not $expectedKitCommit) {
         throw "Missing Wails Desktop Kit packaging tag $expectedKitTag"

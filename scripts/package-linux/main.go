@@ -43,7 +43,7 @@ func run() error {
 	if st, e := os.Stat(filepath.Join(kitRoot, "packaging", "linux_systemd.go")); e != nil || !st.Mode().IsRegular() {
 		return fmt.Errorf("Kit systemd packaging is unavailable at %s", kitRoot)
 	}
-	tag := "v0.10.2"
+	tag := "v0.10.3"
 	resolved := func(args ...string) (string, error) {
 		cmd := exec.Command("git", append([]string{"-C", kitRoot}, args...)...)
 		result, err := cmd.Output()

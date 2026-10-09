@@ -1,5 +1,9 @@
 # MCP Center
 
+> License: **BSD 3-Clause** (SPDX: `BSD-3-Clause`). Copyright (c) 2026 wanstu.
+> See [LICENSE](LICENSE). This applies to MCP Center's own source, not to
+> third-party packages in the vendor directory, which retain their own terms.
+
 MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 
 当前开发边界：
@@ -51,6 +55,19 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - 工具测试状态按 MCP + Tool 保留参数、模式和最后一次运行结果，切换后可恢复
 
 当前发布目标：`v0.1.1`（Linux systemd `.deb` 安装与服务自启纳入这一版）。
+
+## 开源许可证
+
+MCP Center 和独立的 MCP Center Core 均使用 **BSD 3-Clause License**
+（SPDX: `BSD-3-Clause`，Copyright (c) 2026 wanstu）。详见本仓库
+[`LICENSE`](LICENSE) 和 Core 的 `LICENSE` 文件。
+
+Linux `.deb` 包会安装版权/许可证声明至
+`/usr/share/doc/mcp-center/copyright`，并通过 AppStream 声明
+`project_license=BSD-3-Clause`。
+其中 AppStream XML 自身采用 `CC0-1.0`，仅适用于元数据文件，
+**不改变软件的 BSD-3-Clause 授权**。第三方依赖仍遵守其各自的许可证。
+
 
 ## 本地启动
 

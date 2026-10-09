@@ -6,13 +6,13 @@
 
 - `mcp-center` 工作区 clean。
 - 同级目录存在并保持 clean 的 `../mcp-center-core`。
-- Desktop Kit 使用已发布 Go module `github.com/wanstu/wails-desktop-kit v0.10.0`，不要求本地 Kit 仓库。
+- Go Module 仍使用已发布 Kit `v0.10.0`；Linux Debian 打包要求相邻 Kit 仓库 checkout 到 `v0.10.2`，并且 clean。
 - 发布前必须同时通过 `mcp-center` 与 `mcp-center-core` 的 `go test ./...`。
 
 PowerShell：
 
 ```powershell
-./scripts/build-release.ps1 -Version v0.1.0
+./scripts/build-release.ps1 -Version v0.1.1
 ```
 
 产物写入：
@@ -33,6 +33,8 @@ dist/<version>/
 每个构建会注入 Version、Git commit、UTC build time，并生成：
 
 - 六个平台二进制
+- 两个架构的 Linux systemd `.deb`
+- `LICENSE`（BSD-3-Clause）
 - `mcp-center-<version>-source.zip`
 - `SHA256SUMS.txt`
 - `release-manifest.json`
@@ -102,6 +104,21 @@ go build -mod=vendor ./cmd/mcp-center
 - Center 与 Core 目前都没有配置 Git remote，因此正式版本仍以本地 tag + 本地发布目录为准。
 - Core 继续作为独立项目维护，不合并进 Center。
 - 不修改 ADM；未来由 ADM 方自行决定如何接入 Core。
+
+## BSD-3-Clause 开源许可证
+
+MCP Center 与独立的 MCP Center Core 均使用 **BSD 3-Clause License**，
+版权声明见各仓库根目录 `LICENSE`。
+
+正式版发布目录包含 `LICENSE`；源码 ZIP 分别包含 Center、Core 的
+`LICENSE`。Linux Debian 安装包会将完整许可证安装至
+`/usr/share/doc/mcp-center/copyright`，并在 AppStream 元数据中声明
+`project_license=BSD-3-Clause`。AppStream XML 文件自身采用
+`CC0-1.0`，仅为了允许软件中心收录元数据，不改变软件许可证。
+第三方依赖仍适用各自的许可证。
+
+软件中心对来源可信度的提示和项目许可证是两回事；
+添加许可证不等于系统已验证该安装包的来源。
 
 ## Linux Debian 安装与开机自启
 

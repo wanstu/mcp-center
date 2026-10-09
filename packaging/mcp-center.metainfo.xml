@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="console-application">
+  <id>com.github.wanstu.mcp-center</id>
+  <!-- CC0-1.0 applies only to this AppStream metadata document.
+       The MCP Center application and its Core source use BSD-3-Clause. -->
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>BSD-3-Clause</project_license>
+  <name>MCP Center</name>
+  <summary>Self-hosted MCP gateway and web control service</summary>
+  <description>
+    <p>Manage MCP servers, access credentials, runtime sessions, tools and OAuth
+    client authorization from a self-hosted web management interface.</p>
+  </description>
+  <provides>
+    <binary>mcp-center</binary>
+  </provides>
+</component>

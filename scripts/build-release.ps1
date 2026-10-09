@@ -73,6 +73,8 @@ try {
     $releaseDir = Join-Path $OutputDir $Version
     if (Test-Path $releaseDir) { Remove-Item -Recurse -Force $releaseDir }
     New-Item -ItemType Directory -Force $releaseDir | Out-Null
+    # BSD binary redistributions must include the copyright/license notice.
+    Copy-Item -LiteralPath (Join-Path $repoRoot "LICENSE") -Destination (Join-Path $releaseDir "LICENSE")
 
     $targets = @(
         @{ GOOS = "windows"; GOARCH = "amd64"; Ext = ".exe" },
@@ -138,6 +140,7 @@ try {
 
     $manifest = [ordered]@{
         version = $Version
+        license = "BSD-3-Clause"
         build_time_utc = $buildTime
         go_version = (go version)
         source_commits = [ordered]@{

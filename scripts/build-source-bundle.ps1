@@ -61,6 +61,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "mcp-center archive extraction failed" }
     tar -xf $coreTar -C $coreDir
     if ($LASTEXITCODE -ne 0) { throw "mcp-center-core archive extraction failed" }
+    if (-not (Test-Path (Join-Path $centerDir "LICENSE")) -or -not (Test-Path (Join-Path $coreDir "LICENSE"))) {
+        throw "BSD-3-Clause LICENSE files must exist in both Center and Core source trees"
+    }
 
     Push-Location $centerDir
     try {
@@ -74,6 +77,11 @@ try {
 
     $sourceManifest = [ordered]@{
         version = $Version
+        licenses = [ordered]@{
+            mcp_center = "BSD-3-Clause"
+            mcp_center_core = "BSD-3-Clause"
+            appstream_metadata = "CC0-1.0"
+        }
         generated_at_utc = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
         go_version = (go version)
         source_commits = [ordered]@{
@@ -101,8 +109,12 @@ try {
         "",
         "- mcp-center/ - MCP Center source at commit $centerCommit",
         "- mcp-center-core/ - reusable Core source at commit $coreCommit",
+        "- mcp-center/LICENSE and mcp-center-core/LICENSE - BSD-3-Clause notices for first-party source",
         "- mcp-center/vendor/ - vendored Go dependencies, including Core and Desktop Kit code used by Center",
         "- SOURCE-MANIFEST.json - exact source/version metadata",
+        "",
+        "MCP Center and MCP Center Core are licensed BSD-3-Clause.",
+        "Vendored third-party dependencies retain their own licenses and notices.",
         "",
         "## Normal build",
         "",

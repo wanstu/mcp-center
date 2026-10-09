@@ -95,6 +95,8 @@ func run() error {
 			"--package-version", debVersion, "--arch", arch,
 			"--description", "MCP Center MCP gateway and web control service",
 			"--maintainer", "MCP Center", "--depends", "systemd, passwd",
+			"--copyright-file", filepath.Join(root, "LICENSE"),
+			"--appstream-file", filepath.Join(root, "packaging", "mcp-center.metainfo.xml"),
 			"--formats", "deb", "--systemd", "--service-name", "mcp-center",
 			"--service-user", "mcp-center", "--service-group", "mcp-center",
 			"--service-data-dir", "/var/lib/mcp-center",

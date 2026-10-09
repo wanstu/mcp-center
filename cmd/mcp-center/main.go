@@ -34,6 +34,9 @@ func main() {
 	baseURL := flag.String("base-url", "", "Optional canonical public base URL for OAuth metadata (default: localhost; MCP links use the current request address)")
 	dataDir := flag.String("data-dir", defaultDataDir, "Persistent data directory")
 	showVersion := flag.Bool("version", false, "Print version and exit")
+	// Go's built-in flag help must present the same command overview even
+	// when -h appears after another foreground option.
+	flag.Usage = func() { fmt.Fprint(os.Stdout, commandHelp) }
 	if err := flag.CommandLine.Parse(foregroundArgs); err != nil {
 		log.Fatalf("invalid flags: %v", err)
 	}

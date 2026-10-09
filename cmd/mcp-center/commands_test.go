@@ -71,3 +71,30 @@ func TestCLIRoutesWithoutStartingServer(t *testing.T) {
 		t.Fatalf("serve did not keep flags: %v %v", args, err)
 	}
 }
+
+func TestUnifiedHelpFlagsAndServeHelp(t *testing.T) {
+	for _, arguments := range [][]string{
+		{"help"}, {"-h"}, {"--help"}, {"serve", "-h"}, {"serve", "--help"},
+	} {
+		var out bytes.Buffer
+		serverArgs, handled, err := dispatchCLI(arguments, &out)
+		if err != nil || !handled || len(serverArgs) != 0 {
+			t.Fatalf("%q must display help without starting server: handled=%v serverArgs=%v err=%v", arguments, handled, serverArgs, err)
+		}
+		for _, expected := range []string{
+			"mcp-center status", "mcp-center doctor", "mcp-center set-port PORT",
+			"mcp-center autostart on|off", "mcp-center serve [options]",
+			"--listen ADDRESS", "--data-dir PATH", "--base-url URL", "--version",
+		} {
+			if !strings.Contains(out.String(), expected) {
+				t.Errorf("%q help missing %q", arguments, expected)
+			}
+		}
+	}
+	for _, arguments := range [][]string{{"-h", "unexpected"}, {"--help", "unexpected"}} {
+		_, handled, err := dispatchCLI(arguments, &bytes.Buffer{})
+		if !handled || err == nil {
+			t.Fatalf("unexpected extra arguments accepted: %v", arguments)
+		}
+	}
+}

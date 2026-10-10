@@ -150,27 +150,67 @@ func (a *App) handleMCPCall(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handleMCPProxy(w http.ResponseWriter, r *http.Request) {
 	ref := r.PathValue("id")
+	diagnostic := newMCPDiscoveryDiagnostic(r, ref)
+	defer func() {
+		diagnostic.record(r.Context(), a)
+	}()
+
 	def, err := a.core.GetByRef(ref)
 	if err != nil {
+		diagnostic.fail("mcp_not_found")
+		diagnostic.outputMeta["http_status"] = http.StatusNotFound
 		writeError(w, http.StatusNotFound, err)
 		return
 	}
+	diagnostic.mcpID = def.ID
 	if def.Disabled {
+		diagnostic.fail("mcp_disabled")
+		diagnostic.outputMeta["http_status"] = http.StatusServiceUnavailable
 		writeError(w, http.StatusServiceUnavailable, errors.New("MCP 已禁用"))
 		return
 	}
+
 	principal, err := a.authenticateMCPRequest(r, ref)
 	if err != nil {
+		diagnostic.fail("authentication")
+		diagnostic.outputMeta["http_status"] = http.StatusUnauthorized
 		a.writeBearerChallenge(w, r, ref)
 		return
 	}
+	diagnostic.principal = principal
+	diagnostic.inputMeta["principal_kind"] = principal.Kind
+	diagnostic.inputMeta["auth_channel"] = principal.AuthChannel
+
 	r = r.WithContext(auditContextForMCP(r, principal))
+	r = r.WithContext(withMCPDiscoveryDiagnostic(r.Context(), &diagnostic))
+
+	cached := a.proxyCached(def.ID)
+	diagnostic.outputMeta["proxy_cached"] = cached
 	handler, err := a.proxyHandler(r.Context(), def.ID)
 	if err != nil {
+		diagnostic.fail("proxy_build")
+		diagnostic.outputMeta["http_status"] = http.StatusBadGateway
 		writeError(w, http.StatusBadGateway, err)
 		return
 	}
-	withOpenAIToolOAuthMetadata(handler).ServeHTTP(w, r)
+
+	tracked := &mcpDiagnosticResponseWriter{ResponseWriter: w}
+	withOpenAIToolOAuthMetadata(handler).ServeHTTP(tracked, r)
+	if tracked.status == 0 {
+		tracked.status = http.StatusOK
+	}
+	diagnostic.outputMeta["http_status"] = tracked.status
+	diagnostic.outputMeta["response_session_present"] = strings.TrimSpace(tracked.Header().Get("Mcp-Session-Id")) != ""
+	diagnostic.outputMeta["response_content_type"] = strings.TrimSpace(tracked.Header().Get("Content-Type"))
+	if tracked.status >= http.StatusBadRequest {
+		diagnostic.fail("proxy_http")
+	}
+}
+
+func (a *App) proxyCached(id string) bool {
+	a.proxyMu.Lock()
+	defer a.proxyMu.Unlock()
+	return a.proxies[id] != nil
 }
 
 func (a *App) proxyHandler(ctx context.Context, id string) (http.Handler, error) {

@@ -1305,7 +1305,20 @@ function renderAudit(){
     const auth=[item.auth_channel,item.source].filter(Boolean).join(' / ')||'—';
     const status=item.status==='success'?'<span class="status ok">成功</span>':'<span class="status bad">'+escapeHTML(item.error_kind||'失败')+'</span>';
     const keys=Array.isArray(item.input_meta?.keys)?item.input_meta.keys.join(', '):'';
-    const summary=keys?('keys: '+keys):'无参数';
+    let summary=keys?('keys: '+keys):'无参数';
+    if(item.source==='proxy-discovery'){
+      const parts=[];
+      if(item.input_meta?.rpc_method)parts.push(String(item.input_meta.rpc_method));
+      if(item.output_meta?.http_status!==undefined)parts.push('HTTP '+String(item.output_meta.http_status));
+      if(item.input_meta?.protocol_version)parts.push('protocol '+String(item.input_meta.protocol_version));
+      parts.push('req-session:'+(item.input_meta?.request_session_present?'yes':'no'));
+      if(item.output_meta?.response_session_present!==undefined)parts.push('res-session:'+(item.output_meta.response_session_present?'yes':'no'));
+      if(item.output_meta?.proxy_cached!==undefined)parts.push('proxy:'+(item.output_meta.proxy_cached?'cached':'new'));
+      if(item.output_meta?.tool_count!==undefined)parts.push('tools:'+String(item.output_meta.tool_count));
+      if(item.output_meta?.invalid_input_schema_count)parts.push('invalid-schema:'+String(item.output_meta.invalid_input_schema_count));
+      if(item.output_meta?.jsonrpc_error_code!==undefined)parts.push('rpc-error:'+String(item.output_meta.jsonrpc_error_code));
+      summary=parts.join(' · ');
+    }
     tr.innerHTML='<td>'+escapeHTML(when)+'</td><td><span class="muted">'+escapeHTML(item.request_id||'—')+'</span></td><td>'+escapeHTML(principal)+'</td><td>'+escapeHTML(auth)+'</td><td><strong>'+escapeHTML(item.mcp_id||'—')+'</strong><br><span class="muted">'+escapeHTML(item.tool_name||'—')+'</span></td><td>'+escapeHTML(String(item.duration_ms??0))+' ms</td><td>'+status+'</td><td><span class="muted">'+escapeHTML(summary)+'</span></td>';
     body.appendChild(tr);
   }

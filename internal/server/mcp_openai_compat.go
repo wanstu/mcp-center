@@ -34,6 +34,7 @@ func withOpenAIToolOAuthMetadata(next http.Handler) http.Handler {
 		if !ok {
 			enriched = body
 		}
+		summarizeMCPToolsListResponse(mcpDiscoveryDiagnosticFrom(r.Context()), enriched)
 		copyHTTPResponse(w, result, enriched)
 	})
 }
@@ -42,8 +43,7 @@ func isMCPToolsListRequest(r *http.Request) bool {
 	if r == nil || r.Method != http.MethodPost || r.Body == nil {
 		return false
 	}
-	body, err := io.ReadAll(r.Body)
-	r.Body = io.NopCloser(bytes.NewReader(body))
+	body, err := readAndRestoreBody(r)
 	if err != nil {
 		return false
 	}

@@ -135,6 +135,9 @@ func (s *Store) SummarySince(since time.Time, recentErrorLimit int) (Summary, er
 		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
 			continue
 		}
+		if event.Source == "proxy-discovery" {
+			continue
+		}
 		if event.StartedAt.Before(summary.Since) {
 			continue
 		}

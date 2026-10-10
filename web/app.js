@@ -29,7 +29,7 @@ async function mockApi(path,options){
   if(path==='/api/me')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/auth/login')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/auth/logout')return {ok:true};
-  if(path==='/api/version'&&method==='GET')return {version:'dev',commit:'mock123456789',modified:false};
+  if(path==='/api/version'&&method==='GET')return {version:'dev',commit:'mock123456789',modified:false,platform:'windows',architecture:'amd64',go_version:'go1.26.5',kit_version:'v0.11.3'};
   if(path==='/api/connection-info'&&method==='GET')return {base_url:location.origin,listen_address:location.host,data_dir:'mock://mcp-center',secure:location.protocol==='https:',restart_required_for:['listen_address','base_url','data_dir'],mcp_endpoint_template:location.origin+'/mcp/{id}',mcp_id_endpoint_template:location.origin+'/mcp/{id}',mcp_name_endpoint_template:location.origin+'/mcp/{name}',authorization_server_metadata:location.origin+'/.well-known/oauth-authorization-server',is_loopback:/^(localhost|127\.0\.0\.1|\[::1\])(?::|$)/.test(location.host)};
   if(path==='/api/account/password'&&method==='POST')return {user:{id:'usr_demo',username:'admin',role:'admin'}};
   if(path==='/api/settings'&&method==='GET')return {settings:mockData.systemSettings};
@@ -1069,6 +1069,10 @@ function renderAbout(){
   const version=state.versionInfo||{},runtime=state.connectionInfo||{};
   el('about-version').textContent=version.version||'读取中…';
   el('about-commit').textContent=version.commit?(version.commit+(version.modified?' (modified)':'')):'—';
+  el('about-platform').textContent=version.platform||'—';
+  el('about-architecture').textContent=version.architecture||'—';
+  el('about-go-version').textContent=version.go_version||'—';
+  el('about-kit-version').textContent=version.kit_version||'—';
   el('about-base-url').textContent=runtime.base_url||'读取中…';
   el('about-listen').textContent=runtime.listen_address||'读取中…';
   el('about-data-dir').textContent=runtime.data_dir||'读取中…';
@@ -1079,6 +1083,8 @@ async function copyAboutDiagnostics(){
   const v=state.versionInfo||{},c=state.connectionInfo||{};
   const fields=[
     'MCP Center '+(v.version||'?'), 'Commit: '+(v.commit||'?')+(v.modified?' (modified)':''),
+    'Platform: '+(v.platform||'?'), 'Architecture: '+(v.architecture||'?'),
+    'Go: '+(v.go_version||'?'), 'Wails Desktop Kit: '+(v.kit_version||'?'),
     'Base URL: '+(c.base_url||'?'),'Base URL source: '+(c.base_url_source||'?'),
     'Listen: '+(c.listen_address||'?'),'Data dir: '+(c.data_dir||'?')
   ];

@@ -12,7 +12,9 @@ func TestVersionEndpointIsPublic(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("version = %d %s", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "\"version\"") {
-		t.Fatalf("version response missing version: %s", rec.Body.String())
+	for _, field := range []string{"\"version\"", "\"platform\"", "\"architecture\"", "\"go_version\""} {
+		if !strings.Contains(rec.Body.String(), field) {
+			t.Fatalf("version response missing %s: %s", field, rec.Body.String())
+		}
 	}
 }

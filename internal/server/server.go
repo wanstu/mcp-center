@@ -287,7 +287,7 @@ func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: "", Path: "/", HttpOnly: true,
-		SameSite: http.SameSiteLaxMode, Secure: a.secure, MaxAge: -1,
+		SameSite: http.SameSiteLaxMode, Secure: a.secure || strings.HasPrefix(a.connectionBaseURL(r), "https://"), MaxAge: -1,
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
@@ -323,7 +323,7 @@ func (a *App) currentUser(r *http.Request) (account.User, error) {
 func (a *App) setSessionCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: token, Path: "/", HttpOnly: true,
-		SameSite: http.SameSiteLaxMode, Secure: a.secure, MaxAge: 24 * 60 * 60,
+		SameSite: http.SameSiteLaxMode, Secure: a.secure || a.publicBaseURLIsHTTPS(), MaxAge: 24 * 60 * 60,
 	})
 }
 

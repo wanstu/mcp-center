@@ -1,8 +1,8 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,selectedToolMCPID:'',toolParamMode:'form',toolHistory:new Map(),connectionInfo:null,editingMCP:null,importPreview:null,importPreviewSignature:'',accessSettings:null,systemSettings:null,credentials:[],oauthClients:[],oauthTestID:'',oauthTestStatus:'',oauthTestAuthorizeURL:'',upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,selectedToolMCPID:'',toolParamMode:'form',toolHistory:new Map(),connectionInfo:null,editingMCP:null,importPreview:null,importPreviewSignature:'',accessSettings:null,systemSettings:null,versionInfo:null,credentials:[],oauthClients:[],oauthTestID:'',oauthTestStatus:'',oauthTestAuthorizeURL:'',upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
-const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置'};
+const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置',about:'关于'};
 let oauthTestPollTimer=null;
 
 function toast(message){const node=el('toast');node.textContent=message;node.classList.add('show');clearTimeout(window.__toastTimer);window.__toastTimer=setTimeout(()=>node.classList.remove('show'),2200)}
@@ -12,7 +12,7 @@ function clearError(node){node.textContent='';node.classList.add('hidden')}
 const mockData={mcps:[
 {id:'mcp_demo_adm',name:'pj-adm',transport:'streamable-http',auth_mode:'none',endpoint:'http://127.0.0.1:8001/mcp',default_include_in_environment:true},
 {id:'mcp_demo_db',name:'wm-test-db',transport:'stdio',auth_mode:'none',executable:'mysql-mcp',args:['--readonly'],default_include_in_environment:false}
-],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},systemSettings:{audit_retention_days:30,host_whitelist_enabled:false,allowed_hosts:[]},credentials:[],oauthClients:[],upstreamSecrets:[],upstreamSecretValues:{},audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
+],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},systemSettings:{audit_retention_days:30,host_whitelist_enabled:false,allowed_hosts:[],public_base_url:''},credentials:[],oauthClients:[],upstreamSecrets:[],upstreamSecretValues:{},audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
 
 async function api(path,options={}){
   if(state.mock)return mockApi(path,options);
@@ -178,6 +178,7 @@ function switchPage(page){
   if(page==='logs')loadAudit().catch(error=>toast(error.message));
   if(page==='dashboard')loadAuditSummary().catch(error=>toast(error.message));
   if(page==='settings'){renderAccountSettings();Promise.all([loadVersion(),loadConnectionInfo(),loadSystemSettings(),loadUpstreamSecrets()]).catch(error=>toast(error.message))}
+  if(page==='about'){Promise.all([loadVersion(),loadConnectionInfo()]).then(renderAbout).catch(error=>toast(error.message))}
 }
 async function loadAuditSummary(){
   const result=await api('/api/audit/summary');
@@ -1018,8 +1019,17 @@ function renderConnectionInfo(){
   el('connection-loopback-warning').classList.toggle('hidden',!info.is_loopback);
   if(el('settings-listen-address'))el('settings-listen-address').textContent=info.listen_address||'—';
   if(el('settings-base-url'))el('settings-base-url').textContent=info.base_url||'—';
+  el('settings-public-base-url').disabled=info.base_url_source==='command-line';
+  el('save-public-base-url').disabled=info.base_url_source==='command-line';
+  el('use-current-https-url').disabled=info.base_url_source==='command-line';
+  renderAbout();
   if(el('settings-data-dir'))el('settings-data-dir').textContent=info.data_dir||'—';
-  if(el('settings-base-url-warning'))el('settings-base-url-warning').classList.toggle('hidden',!info.is_loopback);
+  const mismatch=location.protocol==='https:'&&String(info.base_url||'').startsWith('http:');
+  const warning=el('settings-base-url-warning');
+  if(warning){
+    warning.classList.toggle('hidden',!info.is_loopback&&!mismatch);
+    warning.textContent=mismatch?'检测到当前页面为 HTTPS，但 OAuth 公开地址仍为 HTTP，会导致 ChatGPT 客户端注册失败。请在下方填入当前 HTTPS 地址并保存。':'当前显示的是本机地址；公网 OAuth 连接建议使用 HTTPS 公开基础地址。';
+  }
   const box=el('connection-endpoints');box.innerHTML='';
   for(const m of state.mcps){
     const nameURL=mcpExternalURL(m,'name'),idURL=mcpExternalURL(m,'id');
@@ -1035,6 +1045,8 @@ function renderConnectionInfo(){
 }
 async function loadVersion(){
   const info=await api('/api/version');
+  state.versionInfo=info;
+  renderAbout();
   const node=el('settings-version');
   if(!node)return;
   let value=info.version||'dev';
@@ -1045,9 +1057,55 @@ async function loadSystemSettings(){
   const result=await api('/api/settings');
   state.systemSettings=result.settings||{audit_retention_days:30};
   el('settings-audit-retention').value=state.systemSettings.audit_retention_days??30;
+  el('settings-public-base-url').value=state.systemSettings.public_base_url||'';
+  const locked=state.connectionInfo?.base_url_source==='command-line';
+  el('settings-public-base-url').disabled=locked;
+  el('save-public-base-url').disabled=locked;
   el('settings-host-whitelist-enabled').checked=Boolean(state.systemSettings.host_whitelist_enabled);
   el('settings-allowed-hosts').value=(state.systemSettings.allowed_hosts||[]).join('\n');
 }
+function renderAbout(){
+  if(!el('about-version'))return;
+  const version=state.versionInfo||{},runtime=state.connectionInfo||{};
+  el('about-version').textContent=version.version||'读取中…';
+  el('about-commit').textContent=version.commit?(version.commit+(version.modified?' (modified)':'')):'—';
+  el('about-base-url').textContent=runtime.base_url||'读取中…';
+  el('about-listen').textContent=runtime.listen_address||'读取中…';
+  el('about-data-dir').textContent=runtime.data_dir||'读取中…';
+  const sources={'command-line':'启动参数 --base-url','settings':'设置中的公开 HTTPS 基础地址','automatic':'自动识别请求地址'};
+  el('about-base-source').textContent=sources[runtime.base_url_source]||'读取中…';
+}
+async function copyAboutDiagnostics(){
+  const v=state.versionInfo||{},c=state.connectionInfo||{};
+  const fields=[
+    'MCP Center '+(v.version||'?'), 'Commit: '+(v.commit||'?')+(v.modified?' (modified)':''),
+    'Base URL: '+(c.base_url||'?'),'Base URL source: '+(c.base_url_source||'?'),
+    'Listen: '+(c.listen_address||'?'),'Data dir: '+(c.data_dir||'?')
+  ];
+  // This summary deliberately excludes access tokens, cookies and secret values.
+  await copyTextValue(fields.join('\n'),'诊断信息已复制');
+}
+async function savePublicBaseURL(){
+  const errorNode=el('settings-public-base-url-error');
+  clearError(errorNode);
+  const value=el('settings-public-base-url').value.trim();
+  if(value){
+    try {
+      const url=new URL(value);
+      if(url.protocol!=='https:'||url.username||url.password||url.pathname!=='/'||url.search||url.hash||value.endsWith('/')){
+        throw new Error('公开地址应为 HTTPS 根地址，不包含路径、参数或结尾斜杠');
+      }
+    } catch(error){showError(errorNode,error.message||'请输入完整的 HTTPS URL');return}
+  }
+  try{
+    const result=await api('/api/settings',{method:'PUT',body:JSON.stringify({public_base_url:value})});
+    state.systemSettings=result.settings;
+    await loadConnectionInfo();
+    await loadSystemSettings();
+    toast(value?'公开 HTTPS 地址已保存，OAuth 发现信息立即生效':'已改为自动识别地址');
+  }catch(error){showError(errorNode,error)}
+}
+
 async function saveSystemSettings(){
   clearError(el('settings-system-error'));
   const days=Number(el('settings-audit-retention').value);
@@ -1331,5 +1389,12 @@ el('clear-audit').onclick=clearAudit;
 el('audit-search').addEventListener('input',renderAudit);
 el('change-password').onclick=changePassword;
 el('save-system-settings').onclick=saveSystemSettings;
+el('save-public-base-url').onclick=savePublicBaseURL;
+el('use-current-https-url').onclick=()=>{
+ if(location.protocol!=='https:'){showError(el('settings-public-base-url-error'),'当前网页不是 HTTPS，请填写可信的公网 HTTPS 地址');return}
+ el('settings-public-base-url').value=location.origin;
+ clearError(el('settings-public-base-url-error'));
+};
+el('about-copy-diagnostics').onclick=copyAboutDiagnostics;
 el('save-network-settings').onclick=saveNetworkSettings;
 bootstrap();

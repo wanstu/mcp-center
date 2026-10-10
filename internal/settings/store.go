@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,6 +13,7 @@ import (
 )
 
 type Values struct {
+	PublicBaseURL        string   `json:"public_base_url,omitempty"`
 	AuditRetentionDays   int      `json:"audit_retention_days"`
 	HostWhitelistEnabled bool     `json:"host_whitelist_enabled"`
 	AllowedHosts         []string `json:"allowed_hosts"`
@@ -73,6 +75,14 @@ func (s *Store) Update(values Values) (Values, error) {
 }
 
 func validate(values Values) error {
+	if values.PublicBaseURL != "" {
+		parsed, err := url.Parse(values.PublicBaseURL)
+		if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil ||
+			parsed.RawQuery != "" || parsed.Fragment != "" || parsed.Path != "" || parsed.Opaque != "" ||
+			strings.HasSuffix(values.PublicBaseURL, "/") || strings.TrimSpace(values.PublicBaseURL) != values.PublicBaseURL {
+			return errors.New("公开基础地址必须是完整的 HTTPS 域名与可选端口，例如 https://mcp.example.com，不能包含路径或查询参数")
+		}
+	}
 	if values.AuditRetentionDays < 1 || values.AuditRetentionDays > 3650 {
 		return errors.New("审计日志保留天数必须在 1 到 3650 天之间")
 	}

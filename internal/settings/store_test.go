@@ -45,3 +45,46 @@ func TestStoreDefaultsPersistsAndValidates(t *testing.T) {
 		}
 	}
 }
+
+func TestPublicBaseURLPersistedAndValidated(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "settings.json")
+	store, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values, err := store.Get()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if values.PublicBaseURL != "" {
+		t.Fatal("new install must not assume public origin")
+	}
+	values.PublicBaseURL = "https://cmcps.wanstu.cn"
+	if _, err = store.Update(values); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := reopened.Get()
+	if err != nil || got.PublicBaseURL != "https://cmcps.wanstu.cn" {
+		t.Fatalf("url not persisted %+v %v", got, err)
+	}
+	invalid := []string{"http://cmcps.wanstu.cn", "https://cmcps.wanstu.cn/path", "https://cmcps.wanstu.cn/", "https://cmcps.wanstu.cn?token=x", "https://user:pw@cmcps.wanstu.cn", "https://cmcps.wanstu.cn#section"}
+	for _, v := range invalid {
+		bad := got
+		bad.PublicBaseURL = v
+		if _, err := store.Update(bad); err == nil {
+			t.Errorf("invalid URL accepted: %s", v)
+		}
+	}
+	reloaded, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	last, err := reloaded.Get()
+	if err != nil || last.PublicBaseURL != "https://cmcps.wanstu.cn" {
+		t.Fatalf("invalid writes mutated stored URL: %+v %v", last, err)
+	}
+}

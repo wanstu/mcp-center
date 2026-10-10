@@ -54,7 +54,7 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - 工具测试参数助手：从 inputSchema 自动生成最小 JSON 示例，并提供 Form / JSON 双模式
 - 工具测试状态按 MCP + Tool 保留参数、模式和最后一次运行结果，切换后可恢复
 
-最新正式版本：`v0.1.2`；当前本地候选版：`v0.1.3-rc.2`，增加 OAuth 动态客户端注册、跨客户端 MCP 导入及自动加密变量。Kit Go Module 与 Linux Debian 打包器继续统一使用 `v0.11.3`。
+最新正式版本：`v0.1.2`；当前本地候选版：`v0.1.3-rc.3`，包含 OAuth 动态客户端注册、跨客户端 MCP 导入、自动加密变量，并修复 HTTPS 反向代理下 OAuth 元数据地址错误；设置页可保存公开 HTTPS 基础地址，侧栏新增「关于」。Kit Go Module 与 Linux Debian 打包器继续统一使用 `v0.11.3`。
 
 ## 开源许可证
 

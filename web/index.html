@@ -59,6 +59,7 @@
         <button data-page="logs">调用日志</button>
         <div class="nav-label">系统</div>
         <button data-page="settings">设置</button>
+        <button data-page="about">关于</button>
       </nav>
       <div class="sidebar-spacer"></div>
       <div class="account-box">
@@ -274,11 +275,19 @@
           </div>
         </div>
         <div class="panel">
-          <div class="panel-head"><div><h2>运行配置</h2><p>这些值来自当前进程启动参数；修改后需要重启 MCP Center。</p></div><span class="status warn">修改需重启</span></div>
+          <div class="panel-head"><div><h2>运行配置</h2><p>监听地址和数据目录由启动参数管理；公开 HTTPS 基础地址可在线保存。</p></div><span class="status">公开地址即时生效</span></div>
           <div class="setting"><div><strong>Listen Address</strong><span id="settings-listen-address">读取中…</span></div><code>--listen</code></div>
           <div class="setting"><div><strong>当前外部访问地址</strong><span id="settings-base-url">读取中…</span></div><code>自动 / --base-url</code></div>
           <div class="setting"><div><strong>Data Directory</strong><span id="settings-data-dir">读取中…</span></div><code>--data-dir</code></div>
-          <div id="settings-base-url-warning" class="notice hidden">当前显示的是本机地址；其他设备可使用服务器 IP 或域名访问，OAuth 授权地址会自动跟随实际访问地址。公网使用建议配置 HTTPS。</div>
+          <div id="settings-base-url-warning" class="notice hidden">当前显示的是本机地址；公网 OAuth 连接建议使用 HTTPS 公开基础地址。</div>
+          <div class="form-grid">
+            <label class="field span-2">公开 HTTPS 基础地址（OAuth / MCP）
+              <input id="settings-public-base-url" type="url" placeholder="https://cmcps.wanstu.cn" autocomplete="url" spellcheck="false">
+              <small>反向代理在内部使用 HTTP 时，请填写浏览器实际访问的 HTTPS 根地址，不包含 /mcp 路径。留空则自动识别；保存后立即生效，无需重启。启动参数 --base-url 优先级更高。</small>
+            </label>
+          </div>
+          <p id="settings-public-base-url-error" class="form-error hidden"></p>
+          <div class="row end"><button id="use-current-https-url" class="button">填入当前 HTTPS 地址</button><button id="save-public-base-url" class="button primary">保存公开地址</button></div>
         </div>
         <div class="panel">
           <div class="panel-head">
@@ -318,6 +327,26 @@
           </div>
           <div id="upstream-secret-empty" class="empty hidden">还没有上游密钥变量。</div>
           <div class="notice">Center 中配置的变量优先于系统环境变量；修改或删除变量会断开已有 MCP Session，下次连接时使用最新值。</div>
+        </div>
+      </section>
+
+      <section id="page-about" class="page">
+        <div class="page-head"><div><h1>关于 MCP Center</h1><p>版本信息、开源许可证与运行诊断。</p></div></div>
+        <div class="panel">
+          <div class="panel-head"><div><h2>MCP Center</h2><p>Self-hosted MCP gateway and management console</p></div><span class="status ok">BSD-3-Clause</span></div>
+          <div class="setting"><div><strong>版本</strong><span id="about-version">读取中…</span></div></div>
+          <div class="setting"><div><strong>Git Commit</strong><span id="about-commit">读取中…</span></div></div>
+          <div class="setting"><div><strong>运行地址</strong><span id="about-base-url">读取中…</span></div></div>
+          <div class="setting"><div><strong>监听地址</strong><span id="about-listen">读取中…</span></div></div>
+          <div class="setting"><div><strong>数据目录</strong><span id="about-data-dir">读取中…</span></div></div>
+          <div class="setting"><div><strong>公开地址来源</strong><span id="about-base-source">读取中…</span></div></div>
+          <div class="row"><button class="button" id="about-copy-diagnostics">复制诊断信息</button></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div><h2>开源与相关项目</h2><p>本项目以 BSD 3-Clause 协议开源。</p></div></div>
+          <div class="setting"><div><strong>MCP Center</strong><span>项目源码与 Release</span></div><a href="https://github.com/wanstu/mcp-center" target="_blank" rel="noopener noreferrer">GitHub</a></div>
+          <div class="setting"><div><strong>MCP Center Core</strong><span>可复用 Go MCP 核心</span></div><a href="https://github.com/wanstu/mcp-center-core" target="_blank" rel="noopener noreferrer">GitHub</a></div>
+          <div class="setting"><div><strong>Wails Desktop Kit</strong><span>Linux systemd 打包基础：v0.11.3</span></div><a href="https://github.com/wanstu/wails-desktop-kit" target="_blank" rel="noopener noreferrer">GitHub</a></div>
         </div>
       </section>
     </main>

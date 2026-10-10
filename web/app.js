@@ -1,9 +1,10 @@
 if(globalThis.desktopKitTheme)globalThis.desktopKitTheme.apply('system');
-const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),tools:new Map(),selectedTool:null,selectedToolMCPID:'',toolParamMode:'form',toolHistory:new Map(),connectionInfo:null,editingMCP:null,importPreview:null,importPreviewSignature:'',accessSettings:null,systemSettings:null,versionInfo:null,credentials:[],oauthClients:[],oauthTestID:'',oauthTestStatus:'',oauthTestAuthorizeURL:'',upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
+const state={user:null,needsBootstrap:false,mcps:[],health:new Map(),runtime:new Map(),scheduledProbes:new Map(),tools:new Map(),selectedTool:null,selectedToolMCPID:'',toolParamMode:'form',toolHistory:new Map(),connectionInfo:null,editingMCP:null,importPreview:null,importPreviewSignature:'',accessSettings:null,systemSettings:null,versionInfo:null,credentials:[],oauthClients:[],oauthTestID:'',oauthTestStatus:'',oauthTestAuthorizeURL:'',upstreamSecrets:[],audits:[],auditSummary:{total:0,success:0,errors:0,recent_errors:[]},page:'dashboard',mock:new URLSearchParams(location.search).get('mock')==='1'};
 const el=id=>document.getElementById(id);
 const json=v=>JSON.stringify(v,null,2);
 const pageNames={dashboard:'工作台',mcps:'MCP 服务',tools:'工具测试',access:'访问授权',logs:'调用日志',settings:'设置',about:'关于'};
 let oauthTestPollTimer=null;
+let runtimePollTimer=null;
 
 function toast(message){const node=el('toast');node.textContent=message;node.classList.add('show');clearTimeout(window.__toastTimer);window.__toastTimer=setTimeout(()=>node.classList.remove('show'),2200)}
 function showError(node,error){node.textContent=String(error?.message||error);node.classList.remove('hidden')}
@@ -85,7 +86,14 @@ async function mockApi(path,options){
     for(const cfg of configs){if(request.selected_names&&!request.selected_names.includes(cfg.name))continue;const i=mockData.mcps.findIndex(x=>x.name.toLowerCase()===String(cfg.name||'').toLowerCase());if(i>=0){if(request.conflict==='error')throw new Error('MCP 已存在: '+cfg.name);if(request.conflict==='skip'){skipped++;continue}mockData.mcps[i]={...mockData.mcps[i],...cfg};updated++;continue}mockData.mcps.push({id:'mcp_'+Date.now()+'_'+added,...cfg});added++}
     return {added,updated,skipped,items:[]};
   }
-  if(path==='/api/runtime'&&method==='GET')return {runtime:mockData.mcps.map(m=>mockData.runtime[m.id]||{mcp_id:m.id,state:'disconnected',tool_count:0})};
+  if(path==='/api/runtime'&&method==='GET')return {
+    runtime:mockData.mcps.map(m=>mockData.runtime[m.id]||{mcp_id:m.id,state:'disconnected',tool_count:0}),
+    scheduled_probes:mockData.mcps.filter(m=>m.health_policy?.health_check_enabled).map(m=>({
+      mcp_id:m.id,enabled:true,active:!m.disabled,running:false,
+      interval_seconds:m.health_policy?.check_interval_seconds||60,
+      probe_timeout_seconds:m.health_policy?.probe_timeout_seconds||10
+    }))
+  };
   const runtimePath=path.match(/^\/api\/runtime\/([^/]+)\/(refresh|disconnect)$/);
   if(runtimePath&&method==='POST'){const id=runtimePath[1],action=runtimePath[2];if(action==='disconnect'){const status={mcp_id:id,state:'disconnected',tool_count:0};mockData.runtime[id]=status;return {status}}const tools=mockData.tools[id]||[];const status={mcp_id:id,state:'connected',tool_count:tools.length,connected_at:new Date().toISOString(),last_used_at:new Date().toISOString()};mockData.runtime[id]=status;return {status,tools}}
   if(path==='/api/mcps'&&method==='GET')return {mcps:mockData.mcps};
@@ -152,6 +160,11 @@ async function enterApp(){
   el('me-name').textContent=state.user?.username||'admin';
   renderAccountSettings();
   await Promise.allSettled([loadMCPs(),loadOAuth(),loadAccess(),loadConnectionInfo(),loadVersion(),loadSystemSettings(),loadUpstreamSecrets(),loadAuditSummary()]);
+  startRuntimePolling();
+}
+function startRuntimePolling(){
+  clearInterval(runtimePollTimer);
+  runtimePollTimer=setInterval(()=>{if(state.user)loadRuntimeStatuses().catch(()=>{})},10000);
 }
 async function submitAuth(event){
   event.preventDefault();clearError(el('auth-error'));
@@ -189,19 +202,37 @@ async function loadMCPs(){
   const [result,runtimeResult]=await Promise.all([api('/api/mcps'),api('/api/runtime')]);
   state.mcps=result.mcps||[];
   state.runtime=new Map((runtimeResult.runtime||[]).map(item=>[item.mcp_id,item]));
+  state.scheduledProbes=new Map((runtimeResult.scheduled_probes||[]).map(item=>[item.mcp_id,item]));
   renderMCPs();renderDashboard();refreshToolMCPSelect();renderConnectionInfo();
 }
 async function loadRuntimeStatuses(){
   const result=await api('/api/runtime');
   state.runtime=new Map((result.runtime||[]).map(item=>[item.mcp_id,item]));
+  state.scheduledProbes=new Map((result.scheduled_probes||[]).map(item=>[item.mcp_id,item]));
   renderMCPs();renderDashboard();
 }
 function mcpStatusKey(m){
   if(m.disabled)return 'disabled';
   const health=state.health.get(m.id),runtime=state.runtime.get(m.id);
-  if(runtime?.state==='connected'||health?.state==='healthy')return 'connected';
-  if(runtime?.state==='error'||health?.state==='error')return 'error';
+  if(runtime?.state==='error')return 'error';
+  if(runtime?.state==='connected')return 'connected';
+  if(health?.state==='error')return 'error';
+  if(health?.state==='healthy')return 'connected';
   return 'disconnected';
+}
+function scheduledProbeSummary(m){
+  const policy=m.health_policy||{};
+  if(!policy.health_check_enabled)return '';
+  const scheduled=state.scheduledProbes.get(m.id);
+  const interval=scheduled?.interval_seconds||policy.check_interval_seconds||60;
+  const parts=['定时 '+interval+' 秒'];
+  if(m.disabled||scheduled?.active===false)parts.push('已暂停');
+  else if(scheduled?.running)parts.push('探测中');
+  else{
+    if(scheduled?.last_checked_at)parts.push('上次 '+new Date(scheduled.last_checked_at).toLocaleTimeString());
+    if(scheduled?.next_probe_at)parts.push('下次 '+new Date(scheduled.next_probe_at).toLocaleTimeString());
+  }
+  return '<br><small class="muted">'+escapeHTML(parts.join(' · '))+'</small>';
 }
 function renderMCPs(){
   const q=el('mcp-search').value.trim().toLowerCase();
@@ -218,6 +249,7 @@ function renderMCPs(){
     if(statusKey==='connected')status='<span class="status ok">已连接</span>';
     else if(statusKey==='error')status='<span class="status bad">异常</span>';
     else if(statusKey==='disabled')status='<span class="status warn">已禁用</span>';
+    status+=scheduledProbeSummary(m);
     const tools=m.disabled?'—':(state.tools.get(m.id)?.length??health?.tools?.length??runtime?.tool_count??'—');
     const where=m.transport==='stdio'?escapeHTML([m.executable,...(m.args||[])].join(' ')):escapeHTML(m.endpoint||'');
     const runtimeActions=m.disabled?'':('<button class="button small" data-op="probe">刷新</button><button class="button small" data-op="test">测试</button>'+(runtime?.state==='connected'?'<button class="button ghost small" data-op="disconnect">断开</button> ':''));
@@ -240,7 +272,7 @@ function renderMCPs(){
 }
 function renderDashboard(){
   el('metric-mcps').textContent=state.mcps.length;
-  const online=state.mcps.filter(m=>!m.disabled&&(state.runtime.get(m.id)?.state==='connected'||state.health.get(m.id)?.state==='healthy')).length;
+  const online=state.mcps.filter(m=>mcpStatusKey(m)==='connected').length;
   el('metric-online').textContent=online;
   let tools=0;
   for(const m of state.mcps)if(!m.disabled)tools+=state.tools.get(m.id)?.length??state.health.get(m.id)?.tools?.length??state.runtime.get(m.id)?.tool_count??0;
@@ -260,8 +292,10 @@ function renderDashboard(){
       const row=document.createElement('div');row.className='service-item';
       const h=state.health.get(m.id),runtime=state.runtime.get(m.id);
       let status=m.disabled?'<span class="status warn">已禁用</span>':'<span class="status">未连接</span>';
-      if(!m.disabled&&(runtime?.state==='connected'||h?.state==='healthy'))status='<span class="status ok">已连接</span>';
-      else if(!m.disabled&&(runtime?.state==='error'||h?.state==='error'))status='<span class="status bad">异常</span>';
+      if(!m.disabled&&runtime?.state==='error')status='<span class="status bad">异常</span>';
+      else if(!m.disabled&&runtime?.state==='connected')status='<span class="status ok">已连接</span>';
+      else if(!m.disabled&&h?.state==='error')status='<span class="status bad">异常</span>';
+      else if(!m.disabled&&h?.state==='healthy')status='<span class="status ok">已连接</span>';
       row.innerHTML='<div><strong>'+escapeHTML(m.name)+'</strong><small>'+escapeHTML(m.transport)+' · '+escapeHTML(m.endpoint||m.executable||'')+'</small></div>'+status;
       box.appendChild(row);
     }
@@ -324,8 +358,13 @@ function openMCPDialog(m=null){
   el('mcp-auth').value=m?.auth_mode||'none';
   el('mcp-headers').value=formatKVMap(m?.header_refs);
   el('mcp-enabled').checked=!Boolean(m?.disabled);
+  const healthPolicy=m?.health_policy||{};
+  el('mcp-health-enabled').checked=Boolean(healthPolicy.health_check_enabled);
+  el('mcp-health-interval').value=String(healthPolicy.check_interval_seconds||60);
+  el('mcp-health-timeout').value=String(healthPolicy.probe_timeout_seconds||10);
   clearError(el('mcp-form-error'));
   updateTransportFields();
+  updateScheduledProbeFields();
   el('mcp-dialog').showModal();
 }
 function updateTransportFields(){
@@ -338,18 +377,34 @@ function updateAuthFields(){
   const show=el('mcp-transport').value==='streamable-http'&&el('mcp-auth').value==='headers';
   document.querySelectorAll('.header-auth-only').forEach(n=>n.classList.toggle('hidden',!show));
 }
+function updateScheduledProbeFields(){
+  const show=el('mcp-health-enabled').checked;
+  document.querySelectorAll('.scheduled-probe-only').forEach(n=>n.classList.toggle('hidden',!show));
+}
 async function saveMCP(event){
   event.preventDefault();clearError(el('mcp-form-error'));
   const id=el('mcp-id').value.trim(),transport=el('mcp-transport').value;
+  const previousHealthPolicy=state.editingMCP?.health_policy||{};
+  const healthEnabled=el('mcp-health-enabled').checked;
+  const healthInterval=Number.parseInt(el('mcp-health-interval').value,10)||60;
+  const healthTimeout=Number.parseInt(el('mcp-health-timeout').value,10)||10;
   const payload={
     name:el('mcp-name').value.trim(),
     transport,
     auth_mode:transport==='stdio'?'none':el('mcp-auth').value,
     disabled:!el('mcp-enabled').checked,
     default_include_in_environment:Boolean(state.editingMCP?.default_include_in_environment),
-    health_policy:state.editingMCP?.health_policy||{health_check_enabled:false,auto_reconnect:false}
+    health_policy:{
+      health_check_enabled:healthEnabled,
+      check_interval_seconds:healthInterval,
+      probe_timeout_seconds:healthTimeout,
+      auto_reconnect:Boolean(previousHealthPolicy.auto_reconnect),
+      reconnect_interval_seconds:Number(previousHealthPolicy.reconnect_interval_seconds||0)
+    }
   };
   try{
+    if(healthEnabled&&healthInterval<5)throw new Error('定时探测间隔不能小于 5 秒');
+    if(healthEnabled&&healthTimeout<1)throw new Error('单次探测超时不能小于 1 秒');
     if(transport==='stdio'){
       payload.executable=el('mcp-executable').value.trim();
       payload.args=el('mcp-args').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
@@ -1350,7 +1405,7 @@ document.querySelectorAll('[data-password-toggle]').forEach(button=>button.addEv
   setPasswordVisibility(field.type==='password');
 }));
 el('auth-confirm-password').addEventListener('input',()=>clearError(el('auth-error')));
-el('logout').onclick=async()=>{try{await api('/api/auth/logout',{method:'POST'})}finally{state.user=null;showAuth(false)}};
+el('logout').onclick=async()=>{try{await api('/api/auth/logout',{method:'POST'})}finally{state.user=null;clearInterval(runtimePollTimer);runtimePollTimer=null;showAuth(false)}};
 el('refresh').onclick=async()=>{try{await Promise.all([loadMCPs(),loadAuditSummary()]);toast('已刷新')}catch(error){toast(error.message)}};
 el('probe-all').onclick=probeAll;
 el('open-import').onclick=openImportDialog;
@@ -1372,6 +1427,7 @@ el('mcp-search').addEventListener('input',renderMCPs);
 el('mcp-status-filter').addEventListener('change',renderMCPs);
 el('mcp-transport').addEventListener('change',updateTransportFields);
 el('mcp-auth').addEventListener('change',updateAuthFields);
+el('mcp-health-enabled').addEventListener('change',updateScheduledProbeFields);
 el('mcp-form').addEventListener('submit',saveMCP);
 el('tool-mcp').addEventListener('change',event=>{selectTool(null);loadTools(event.target.value)});
 el('tool-args').addEventListener('input',saveCurrentToolState);

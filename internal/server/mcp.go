@@ -48,6 +48,7 @@ func (a *App) handleMCPUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.invalidateProxy(id)
+	a.resetScheduledProbe(id)
 	writeJSON(w, http.StatusOK, map[string]any{"mcp": item})
 }
 
@@ -66,6 +67,7 @@ func (a *App) handleMCPState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.invalidateProxy(id)
+	a.resetScheduledProbe(id)
 	writeJSON(w, http.StatusOK, map[string]any{"mcp": item})
 }
 
@@ -87,6 +89,7 @@ func (a *App) handleMCPDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.invalidateProxy(id)
+	a.resetScheduledProbe(id)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
@@ -97,7 +100,9 @@ func (a *App) handleMCPProbe(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	status, err := a.core.Probe(ctx, r.PathValue("id"))
+	id := r.PathValue("id")
+	status, err := a.core.Probe(ctx, id)
+	a.recordScheduledProbeResult(id, status, err, true)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)
 		return

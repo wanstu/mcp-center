@@ -459,6 +459,14 @@
         <label class="field">名称<input id="mcp-name" required></label>
         <label class="field">Transport<select id="mcp-transport"><option value="streamable-http">Streamable HTTP</option><option value="stdio">stdio</option></select></label>
         <label class="check span-2"><input id="mcp-enabled" type="checkbox" checked> 启用服务</label>
+        <label class="check span-2"><input id="mcp-health-enabled" type="checkbox"> 启用定时探测</label>
+        <label class="field scheduled-probe-only hidden">探测间隔（秒）
+          <input id="mcp-health-interval" type="number" min="5" step="1" value="60">
+        </label>
+        <label class="field scheduled-probe-only hidden">单次超时（秒）
+          <input id="mcp-health-timeout" type="number" min="1" step="1" value="10">
+        </label>
+        <div class="span-2 scheduled-probe-only hidden"><small>启用后会立即探测一次，之后按设定间隔自动探测；关闭或禁用 MCP 后停止。</small></div>
         <label class="field span-2 http-only">Endpoint
           <input id="mcp-endpoint" placeholder="https://example.com/mcp">
           <small>可直接填写 URL，也可使用环境变量模板。</small>

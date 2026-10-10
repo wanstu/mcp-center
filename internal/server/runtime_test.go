@@ -39,7 +39,7 @@ func TestRuntimeManagementAPI(t *testing.T) {
 	}
 
 	list := requestJSON(t, handler, http.MethodGet, "/api/runtime", nil, session)
-	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), id) || !strings.Contains(list.Body.String(), "\"state\":\"disconnected\"") {
+	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), id) || !strings.Contains(list.Body.String(), "\"state\":\"disconnected\"") || !strings.Contains(list.Body.String(), "\"scheduled_probes\"") {
 		t.Fatalf("runtime list = %d %s", list.Code, list.Body.String())
 	}
 

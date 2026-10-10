@@ -45,6 +45,10 @@ try {
     go test ./... -count=1 -timeout 30s
     if ($LASTEXITCODE -ne 0) { throw "mcp-center go test failed" }
 
+    Write-Host "Testing scheduled probe UI..."
+    & node (Join-Path $PSScriptRoot "smoke-scheduled-probe-ui.cjs")
+    if ($LASTEXITCODE -ne 0) { throw "Scheduled probe UI smoke failed" }
+
     Write-Host "Testing mcp-center-core..."
     Push-Location $coreRoot
     try {

@@ -53,6 +53,9 @@ type App struct {
 	proxyMu sync.Mutex
 	proxies map[string]http.Handler
 
+	scheduledProbeMu sync.RWMutex
+	scheduledProbes  map[string]*scheduledProbeState
+
 	oauthTestMu sync.Mutex
 	oauthTests  map[string]*oauthSelfTest
 
@@ -121,8 +124,9 @@ func New(cfg Config) (*App, error) {
 		core: coreService, access: accessService, account: accounts, oauth: oauthService, audit: auditLog,
 		upstreamSecrets: upstreamSecrets, settings: settingsService,
 		assets: cfg.Assets, baseURL: base, baseURLExplicit: strings.TrimSpace(cfg.BaseURL) != "" && !cfg.AutoBaseURL, dataDir: cfg.DataDir, secure: strings.HasPrefix(base, "https://"),
-		proxies:    map[string]http.Handler{},
-		oauthTests: map[string]*oauthSelfTest{},
+		proxies:         map[string]http.Handler{},
+		scheduledProbes: map[string]*scheduledProbeState{},
+		oauthTests:      map[string]*oauthSelfTest{},
 	}, nil
 }
 
@@ -219,6 +223,7 @@ func (a *App) ListenAndServe(ctx context.Context, listen string) (*http.Server, 
 		WriteTimeout:      0,
 		IdleTimeout:       90 * time.Second,
 	}
+	go a.runScheduledProbeLoop(ctx)
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

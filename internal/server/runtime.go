@@ -12,7 +12,10 @@ func (a *App) handleRuntimeList(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"runtime": items})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"runtime":          items,
+		"scheduled_probes": a.scheduledProbeViews(),
+	})
 }
 
 func (a *App) handleRuntimeRefresh(w http.ResponseWriter, r *http.Request) {

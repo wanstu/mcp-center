@@ -78,6 +78,25 @@ function Assert-EchoTool {
     }
 }
 
+function Wait-ScheduledProbe {
+    param(
+        [string]$BaseUrl,
+        [string]$McpId,
+        [int]$TimeoutSeconds = 10
+    )
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        $runtime = Invoke-CenterJson -Method Get -Uri "$BaseUrl/api/runtime" -Session $script:CenterSession
+        $probe = @($runtime.scheduled_probes | Where-Object { $_.mcp_id -eq $McpId }) | Select-Object -First 1
+        $runtimeStatus = @($runtime.runtime | Where-Object { $_.mcp_id -eq $McpId }) | Select-Object -First 1
+        if ($null -ne $probe -and $probe.last_checked_at -and $probe.last_state -eq "healthy" -and $runtimeStatus.state -eq "connected") {
+            return
+        }
+        Start-Sleep -Milliseconds 200
+    }
+    throw "Scheduled probe did not become healthy for MCP $McpId within $TimeoutSeconds seconds"
+}
+
 # Verify the final *packaged* executable's CLI, rather than only go run
 # or unit-test help strings. Help must exit without creating a listener.
 function Assert-CLIHelp([string]$Executable) {
@@ -159,9 +178,18 @@ try {
         transport = "streamable-http"
         auth_mode = "none"
         endpoint = $httpEndpoint
+        health_policy = @{
+            health_check_enabled = $true
+            check_interval_seconds = 2
+            probe_timeout_seconds = 2
+            auto_reconnect = $false
+        }
     }
     $httpMcpId = $httpMcp.mcp.id
     if (-not $httpMcpId) { throw "HTTP MCP creation did not return an id" }
+    Write-Host "Testing scheduled MCP probe..."
+    Wait-ScheduledProbe -BaseUrl $baseUrl -McpId $httpMcpId
+    Write-Host "Scheduled MCP probe passed."
     Write-Host "Testing HTTP MCP tools/list + tools/call..."
     Assert-EchoTool -BaseUrl $baseUrl -McpId $httpMcpId -Message "http-ok"
     Write-Host "HTTP MCP passed."
@@ -187,6 +215,7 @@ try {
 
     Write-Host "Release smoke test passed:"
     Write-Host "  Version: $($version.version)"
+    Write-Host "  Scheduled probe: automatic health check OK"
     Write-Host "  HTTP MCP: tools/list + tools/call OK"
     Write-Host "  OAuth: authorize + PKCE + MCP + refresh + revoke OK"
     Write-Host "  stdio MCP: tools/list + tools/call OK"

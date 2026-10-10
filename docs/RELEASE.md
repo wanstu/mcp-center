@@ -13,6 +13,7 @@
   - 新的 `v*` tag 自动触发。
   - 已存在但尚未由 CI 发布的 tag，可通过 `workflow_dispatch` 指定 Center tag、版本和 Core tag 重建。
   - 正式产物只使用 GitHub Runner 从 tag 源码重新构建的结果，不上传开发机 `dist/` 目录中的二进制。
+  - 已存在的 Release 不允许覆盖附件；同一 tag 的正式产物发布后保持不可变，需要修复时发布新版本号。
 
 当前 Center 使用 MCP Center Core `v0.1.1`。本地 `go.mod` 仍保留 sibling `replace ../mcp-center-core` 以方便 Center/Core 联调；GitHub Actions 会显式 checkout `v0.1.1` 到 sibling 路径，因此 CI 构建不依赖某台开发机的目录内容。
 

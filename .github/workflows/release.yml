@@ -112,13 +112,14 @@ jobs:
         run: |
           set -euo pipefail
           if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$VERSION" release/* --repo "$GITHUB_REPOSITORY" --clobber
-          else
-            args=(release create "$VERSION" release/* --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "MCP Center $VERSION")
-            if [[ "$VERSION" == *-* ]]; then
-              args+=(--prerelease)
-            else
-              args+=(--latest)
-            fi
-            gh "${args[@]}"
+            echo "Release $VERSION already exists. Refusing to overwrite published assets."
+            exit 1
           fi
+
+          args=(release create "$VERSION" release/* --repo "$GITHUB_REPOSITORY" --verify-tag --generate-notes --title "MCP Center $VERSION")
+          if [[ "$VERSION" == *-* ]]; then
+            args+=(--prerelease)
+          else
+            args+=(--latest)
+          fi
+          gh "${args[@]}"

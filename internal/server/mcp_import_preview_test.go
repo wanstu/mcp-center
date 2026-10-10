@@ -64,7 +64,7 @@ func TestMCPImportADMSourcesPreviewSelectionAndSanitization(t *testing.T) {
 	if len(saved) != 1 || saved[0].Name != "remote-tools" {
 		t.Fatalf("selected import saved %+v", saved)
 	}
-	if !strings.HasPrefix(saved[0].HeaderRefs["Authorization"], "Bearer ${MCP_CENTER_IMPORT_") {
+	if !strings.HasPrefix(saved[0].HeaderRefs["Authorization"], "Bearer ${REMOTE_TOOLS_HEADERS_AUTHORIZATION_") {
 		t.Fatalf("unexpected generated reference %+v", saved[0].HeaderRefs)
 	}
 	if strings.Contains(saved[0].HeaderRefs["Authorization"], secret) {

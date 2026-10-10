@@ -169,6 +169,7 @@ func (a *App) Handler() http.Handler {
 	mux.Handle("DELETE /api/access/credentials/{id}", a.requireAdmin(http.HandlerFunc(a.handleAccessCredentialDelete)))
 
 	mux.Handle("GET /api/upstream-secrets", a.requireAdmin(http.HandlerFunc(a.handleUpstreamSecretList)))
+	mux.Handle("GET /api/upstream-secrets/{name}/reveal", a.requireAdmin(http.HandlerFunc(a.handleUpstreamSecretReveal)))
 	mux.Handle("PUT /api/upstream-secrets/{name}", a.requireAdmin(http.HandlerFunc(a.handleUpstreamSecretSet)))
 	mux.Handle("DELETE /api/upstream-secrets/{name}", a.requireAdmin(http.HandlerFunc(a.handleUpstreamSecretDelete)))
 

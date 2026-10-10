@@ -50,6 +50,7 @@ type mcpImportCandidate struct {
 	Errors                []mcpImportIssue       `json:"errors,omitempty"`
 	ReferenceRequirements []mcpImportRequirement `json:"reference_requirements,omitempty"`
 	config                mcpcenter.Config
+	secretValues          map[string]string // never serialized or shown in preview
 }
 type mcpImportPreview struct {
 	Format      string               `json:"format"`
@@ -315,50 +316,74 @@ func normalizeImportedRefs(item *mcpImportCandidate, serverName, field string, r
 			item.Errors = append(item.Errors, issue("invalid_reference", field+"."+key, "变量值必须是字符串"))
 			continue
 		}
-		val = strings.TrimSpace(val)
-		val = normalizeEnvBrace(val)
-		if strings.Contains(val, "${") {
-			result[key] = val
+		// Preserve literal value bytes: whitespace can be meaningful for credentials.
+		normalized := normalizeEnvBrace(strings.TrimSpace(val))
+		if strings.Contains(normalized, "${") {
+			result[key] = normalized
 			continue
 		}
 		if !convert {
-			item.Errors = append(item.Errors, issue("literal_reference", field+"."+key, "包含明文值；请替换成 ${NAME} environment reference，或勾选安全转换"))
+			item.Errors = append(item.Errors, issue("literal_reference", field+"."+key, "包含明文值；请开启自动加密保存或使用 ${NAME} 引用"))
 			continue
 		}
 		ref := generatedMCPImportRef(serverName, field, key)
 		placeholder := "${" + ref + "}"
+		valueToStore := val
 		if field == "headers" {
 			lower := strings.ToLower(val)
 			for _, prefix := range []string{"bearer ", "basic "} {
 				if strings.HasPrefix(lower, prefix) {
 					placeholder = val[:len(prefix)] + placeholder
+					valueToStore = val[len(prefix):]
 					break
 				}
 			}
 		}
+		if valueToStore == "" {
+			item.Errors = append(item.Errors, issue("empty_reference", field+"."+key, "变量值为空，无法加密保存"))
+			continue
+		}
+		if item.secretValues == nil {
+			item.secretValues = make(map[string]string)
+		}
+		item.secretValues[ref] = valueToStore
 		result[key] = placeholder
 		item.ReferenceRequirements = append(item.ReferenceRequirements, mcpImportRequirement{ReferenceName: ref, FieldPath: field + "." + key})
-		item.Warnings = append(item.Warnings, issue("secret_not_imported", field+"."+key, "明文未保存；导入后请在设置 → 上游密钥变量中填写原值"))
+		item.Warnings = append(item.Warnings, issue("secret_auto_saved", field+"."+key, "确认导入时将自动加密保存变量；预览不显示明文"))
 	}
 	return result
 }
 func generatedMCPImportRef(server, field, key string) string {
-	parts := []string{"MCP_CENTER_IMPORT", server, field, key}
-	var builder strings.Builder
-	for _, part := range parts {
-		builder.WriteByte('_')
-		for _, ch := range strings.ToUpper(part) {
-			if ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' {
-				builder.WriteRune(ch)
-			} else {
-				builder.WriteByte('_')
+	// Keep the MCP name up front; a deterministic suffix prevents collisions.
+	sanitize := func(s string) string {
+		var b strings.Builder
+		underscore := false
+		for _, r := range strings.ToUpper(s) {
+			valid := (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
+			if valid {
+				b.WriteRune(r)
+				underscore = false
+			} else if !underscore {
+				b.WriteByte('_')
+				underscore = true
 			}
 		}
+		return strings.Trim(b.String(), "_")
 	}
-	name := strings.Trim(strings.ReplaceAll(builder.String(), "__", "_"), "_")
-	// Avoid collisions when source names normalize to the same identifier.
+	prefix := sanitize(server)
+	if prefix == "" {
+		prefix = "MCP"
+	}
+	if prefix[0] >= '0' && prefix[0] <= '9' {
+		prefix = "MCP_" + prefix
+	}
+	name := prefix + "_" + sanitize(field) + "_" + sanitize(key)
+	if len(name) > 110 {
+		name = name[:110]
+		name = strings.TrimRight(name, "_")
+	}
 	digest := sha256.Sum256([]byte(server + "\x00" + field + "\x00" + key))
-	return fmt.Sprintf("%s_%x", name, digest[:4])
+	return fmt.Sprintf("%s_%X", name, digest[:4])
 }
 func normalizeEnvBrace(v string) string {
 	for {

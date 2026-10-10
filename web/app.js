@@ -12,7 +12,7 @@ function clearError(node){node.textContent='';node.classList.add('hidden')}
 const mockData={mcps:[
 {id:'mcp_demo_adm',name:'pj-adm',transport:'streamable-http',auth_mode:'none',endpoint:'http://127.0.0.1:8001/mcp',default_include_in_environment:true},
 {id:'mcp_demo_db',name:'wm-test-db',transport:'stdio',auth_mode:'none',executable:'mysql-mcp',args:['--readonly'],default_include_in_environment:false}
-],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},systemSettings:{audit_retention_days:30,host_whitelist_enabled:false,allowed_hosts:[]},credentials:[],oauthClients:[],upstreamSecrets:[],audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
+],tools:{mcp_demo_adm:[{name:'environment_list',description:'List lightweight Environment summaries',input_schema:{type:'object',properties:{}}},{name:'read',description:'Read a text file',input_schema:{type:'object',properties:{path:{type:'string'}},required:['path']}}],mcp_demo_db:[{name:'query',description:'Run a read-only query',input_schema:{type:'object',properties:{sql:{type:'string'}},required:['sql']}}]},runtime:{},accessSettings:{bearer_enabled:true,header_enabled:true,header_name:'X-MCP-Token',query_enabled:false,query_name:'mcp_token'},systemSettings:{audit_retention_days:30,host_whitelist_enabled:false,allowed_hosts:[]},credentials:[],oauthClients:[],upstreamSecrets:[],upstreamSecretValues:{},audits:[{request_id:'req_demo',source:'console',principal_id:'usr_demo',principal_name:'admin',auth_channel:'session',mcp_id:'mcp_demo_adm',tool_name:'environment_list',started_at:new Date().toISOString(),duration_ms:42,status:'success',input_meta:{key_count:0,keys:[]},output_meta:{content_count:1,is_error:false,has_structured_content:true}}]};
 
 async function api(path,options={}){
   if(state.mock)return mockApi(path,options);
@@ -35,15 +35,21 @@ async function mockApi(path,options){
   if(path==='/api/settings'&&method==='GET')return {settings:mockData.systemSettings};
   if(path==='/api/settings'&&method==='PUT'){mockData.systemSettings={...mockData.systemSettings,...JSON.parse(options.body)};return {settings:mockData.systemSettings}}
   if(path==='/api/upstream-secrets'&&method==='GET')return {secrets:mockData.upstreamSecrets};
+  const upstreamReveal=path.match(/^\/api\/upstream-secrets\/([^/]+)\/reveal$/);
+  if(upstreamReveal && method==='GET') {
+    const name=decodeURIComponent(upstreamReveal[1]);
+    if(!mockData.upstreamSecretValues?.[name])throw new Error('变量不存在');
+    return {name,value:mockData.upstreamSecretValues[name]};
+  }
   const upstreamSecret=path.match(/^\/api\/upstream-secrets\/([^/]+)$/);
   if(upstreamSecret){
     const name=decodeURIComponent(upstreamSecret[1]);
     if(method==='PUT'){
       const now=new Date().toISOString(),existing=mockData.upstreamSecrets.find(x=>x.name===name);
       const item={name,created_at:existing?.created_at||now,updated_at:now};
-      mockData.upstreamSecrets=mockData.upstreamSecrets.filter(x=>x.name!==name);mockData.upstreamSecrets.push(item);return {secret:item};
+      mockData.upstreamSecrets=mockData.upstreamSecrets.filter(x=>x.name!==name);mockData.upstreamSecrets.push(item);mockData.upstreamSecretValues[name]=JSON.parse(options.body).value;return {secret:item};
     }
-    if(method==='DELETE'){mockData.upstreamSecrets=mockData.upstreamSecrets.filter(x=>x.name!==name);return {ok:true}}
+    if(method==='DELETE'){mockData.upstreamSecrets=mockData.upstreamSecrets.filter(x=>x.name!==name);delete mockData.upstreamSecretValues[name];return {ok:true}}
   }
   if(path==='/api/oauth/clients'&&method==='GET')return {clients:mockData.oauthClients};
   if(path==='/api/oauth/clients'&&method==='POST'){const input=JSON.parse(options.body),item={client_id:'client_'+Date.now(),created_at:new Date().toISOString(),grant_types:input.grant_types||['authorization_code','refresh_token'],response_types:input.response_types||['code'],...input};mockData.oauthClients.push(item);return {client:item}}
@@ -462,7 +468,7 @@ function renderImportPreview(preview){
     for(const requirement of (candidate.reference_requirements||[])){
       const item=document.createElement('small');
       item.className='import-ref';
-      item.textContent='待配置密钥变量：'+requirement.reference_name;
+      item.textContent='导入时自动加密保存：'+requirement.reference_name;
       card.append(item);
     }
     list.append(card);
@@ -1082,7 +1088,8 @@ function renderUpstreamSecrets(){
   for(const item of state.upstreamSecrets){
     const tr=document.createElement('tr');
     const updated=item.updated_at?new Date(item.updated_at).toLocaleString():'—';
-    tr.innerHTML='<td><strong>'+escapeHTML(item.name)+'</strong></td><td class="muted">'+escapeHTML(updated)+'</td><td><div class="row"><button class="button ghost small" data-replace>替换值</button><button class="button ghost small" data-delete>删除</button></div></td>';
+    tr.innerHTML='<td><strong>'+escapeHTML(item.name)+'</strong></td><td class="muted">'+escapeHTML(updated)+'</td><td><div class="row"><button class="button ghost small" data-reveal>查看值</button><button class="button ghost small" data-replace>替换值</button><button class="button ghost small" data-delete>删除</button></div></td>';
+    tr.querySelector('[data-reveal]').onclick=()=>revealUpstreamSecret(item);
     tr.querySelector('[data-replace]').onclick=()=>openUpstreamSecretDialog(item);
     tr.querySelector('[data-delete]').onclick=()=>deleteUpstreamSecret(item);
     body.appendChild(tr);
@@ -1091,6 +1098,25 @@ function renderUpstreamSecrets(){
   el('upstream-secret-table-wrap').classList.toggle('hidden',empty);
   el('upstream-secret-empty').classList.toggle('hidden',!empty);
 }
+let upstreamRevealTimeout=null;
+function closeUpstreamSecretReveal(){
+  el('upstream-secret-reveal-dialog').close();
+  el('upstream-secret-reveal-value').value='';
+  el('upstream-secret-reveal-name').textContent='';
+  clearTimeout(upstreamRevealTimeout);
+  upstreamRevealTimeout=null;
+}
+async function revealUpstreamSecret(item){
+  try{
+    const result=await api('/api/upstream-secrets/'+encodeURIComponent(item.name)+'/reveal',{cache:'no-store'});
+    el('upstream-secret-reveal-name').textContent=item.name;
+    el('upstream-secret-reveal-value').value=result.value;
+    el('upstream-secret-reveal-dialog').showModal();
+    clearTimeout(upstreamRevealTimeout);
+    upstreamRevealTimeout=setTimeout(closeUpstreamSecretReveal,30000);
+  }catch(error){toast('读取变量失败：'+error.message)}
+}
+
 function openUpstreamSecretDialog(item=null){
   clearError(el('upstream-secret-error'));
   el('upstream-secret-dialog-title').textContent=item?'替换上游密钥变量':'添加上游密钥变量';
@@ -1239,6 +1265,7 @@ document.addEventListener('click',event=>{
   if(event.target.closest('[data-action="close-oauth-client-dialog"]'))el('oauth-client-dialog').close();
   if(event.target.closest('[data-action="close-oauth-test-dialog"]'))closeOAuthSelfTestDialog();
   if(event.target.closest('[data-action="close-upstream-secret-dialog"]'))el('upstream-secret-dialog').close();
+  if(event.target.closest('[data-action="close-upstream-reveal"]'))closeUpstreamSecretReveal();
 });
 el('auth-form').addEventListener('submit',submitAuth);
 document.querySelectorAll('[data-password-toggle]').forEach(button=>button.addEventListener('click',()=>{
@@ -1284,6 +1311,17 @@ el('add-oauth-client').onclick=()=>openOAuthClientDialog();
 el('add-upstream-secret').onclick=()=>openUpstreamSecretDialog();
 el('oauth-client-form').addEventListener('submit',saveOAuthClient);
 el('upstream-secret-form').addEventListener('submit',saveUpstreamSecret);
+el('upstream-secret-reveal-dialog').addEventListener('close',()=>{
+  el('upstream-secret-reveal-value').value='';
+  el('upstream-secret-reveal-name').textContent='';
+  clearTimeout(upstreamRevealTimeout);upstreamRevealTimeout=null;
+});
+el('upstream-secret-reveal-copy').onclick=async()=>{
+  const value=el('upstream-secret-reveal-value').value;
+  if(!value)return;
+  try{await navigator.clipboard.writeText(value);toast('变量值已复制')}catch{toast('复制失败，请手动复制')}
+};
+
 el('save-access-settings').onclick=saveAccessSettings;
 el('credential-form').addEventListener('submit',saveCredential);
 el('close-secret').onclick=()=>el('secret-dialog').close();

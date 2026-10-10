@@ -64,7 +64,7 @@ func TestMCPImportRejectsUnsafeLiteralSecret(t *testing.T) {
 		"conflict": "error",
 		"content":  content,
 	}, session)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "environment reference") {
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "自动加密保存") {
 		t.Fatalf("unsafe import = %d %s", rec.Code, rec.Body.String())
 	}
 	list := requestJSON(t, handler, http.MethodGet, "/api/mcps", nil, session)

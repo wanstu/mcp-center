@@ -307,7 +307,7 @@
         </div>
         <div class="panel">
           <div class="panel-head">
-            <div><h2>上游密钥变量</h2><p>供 MCP Definition 中的 <code>${NAME}</code> 引用。变量值加密保存，不会在列表中回显。</p></div>
+            <div><h2>上游密钥变量</h2><p>供 MCP Definition 中的 <code>${NAME}</code> 引用。变量值加密保存在磁盘上，默认隐藏，管理员可按需查看。</p></div>
             <button id="add-upstream-secret" class="button primary">添加变量</button>
           </div>
           <div id="upstream-secret-table-wrap" class="table-wrap">
@@ -330,10 +330,19 @@
         <label class="field span-2">变量名<input id="upstream-secret-name" maxlength="128" placeholder="MCP_API_KEY" autocomplete="off"></label>
         <label class="field span-2">变量值<input id="upstream-secret-value" type="password" autocomplete="new-password" placeholder="输入密钥值"></label>
       </div>
-      <div class="notice">保存后不会再次显示原始值。需要更换时使用“替换值”。</div>
+      <div class="notice">变量值会加密保存，之后可在列表中点击“查看值”，也可以替换或删除。</div>
       <p id="upstream-secret-error" class="form-error hidden"></p>
       <div class="dialog-actions"><button type="button" class="button" data-action="close-upstream-secret-dialog">取消</button><button type="submit" class="button primary">保存</button></div>
     </form>
+  </dialog>
+
+  <dialog id="upstream-secret-reveal-dialog" class="dialog">
+    <div class="dialog-head"><div><h2>查看加密变量</h2><p id="upstream-secret-reveal-name"></p></div><button type="button" class="icon-button" data-action="close-upstream-reveal">×</button></div>
+    <label class="field">变量值
+      <input id="upstream-secret-reveal-value" type="text" autocomplete="off" spellcheck="false" readonly>
+    </label>
+    <div class="notice">仅在管理员主动查看时解密。关闭窗口会清除页面里的值；请勿在共享或不安全的屏幕上操作。</div>
+    <div class="dialog-actions"><button type="button" class="button" id="upstream-secret-reveal-copy">复制值</button><button type="button" class="button primary" data-action="close-upstream-reveal">关闭</button></div>
   </dialog>
 
   <dialog id="oauth-test-dialog" class="dialog oauth-test-dialog">
@@ -377,9 +386,9 @@
           <span id="import-file-name" class="muted">也可以直接粘贴客户端 MCP 配置</span>
         </div>
         <label class="field span-2">配置 JSON / JSONC<textarea id="import-content" rows="11" spellcheck="false" placeholder='{"mcpServers":{"example":{"url":"https://example.com/mcp"}}}'></textarea></label>
-        <label class="check span-2"><input type="checkbox" id="import-convert-literals" checked>将 Header / env 明文值转换为变量引用（明文不会写入 MCP 配置）</label>
+        <label class="check span-2"><input type="checkbox" id="import-convert-literals" checked>将 Header / env 明文自动加密保存为变量（MCP 配置只存引用）</label>
       </div>
-      <div class="notice">安全提示：预览不会显示密钥值。转换后需要到“设置 → 上游密钥变量”为生成的变量名填写原值，否则对应 MCP 可能暂时无法连接。</div>
+      <div class="notice">安全提示：预览不会显示密钥值，确认导入时自动加密保存生成的变量；已有同名变量的值不同时会提示冲突，不会覆盖。</div>
       <div id="import-preview" class="import-preview hidden" aria-live="polite"></div>
       <p id="import-error" class="form-error hidden"></p>
       <div class="dialog-actions"><button type="button" class="button" data-action="close-import-dialog">取消</button><button id="import-submit" type="submit" class="button primary">预览配置</button></div>

@@ -106,6 +106,74 @@ func (s *Store) Set(name, value string) (Info, error) {
 	return Info{Name: name, CreatedAt: current.CreatedAt, UpdatedAt: current.UpdatedAt}, nil
 }
 
+// WithCreatedBatch saves new encrypted variables, performs apply, and
+// restores the previous secret store if apply fails. The store lock prevents
+// other secret mutations from interleaving with the import. Existing variables
+// can only be reused when the underlying plaintext matches exactly; their
+// values are never silently overwritten.
+func (s *Store) WithCreatedBatch(values map[string]string, apply func() error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	previous := make(map[string]entry, len(s.entries))
+	for k, v := range s.entries {
+		previous[k] = v
+	}
+	next := make(map[string]entry, len(previous)+len(values))
+	for k, v := range previous {
+		next[k] = v
+	}
+	names := make([]string, 0, len(values))
+	for name := range values {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	now := time.Now().UTC()
+	changed := false
+	for _, name := range names {
+		value := values[name]
+		if !namePattern.MatchString(name) || len(name) > 128 {
+			return fmt.Errorf("变量名 %q 不合法", name)
+		}
+		if value == "" || len(value) > 64*1024 {
+			return fmt.Errorf("变量 %q 为空或超过 64 KB", name)
+		}
+		if existing, ok := next[name]; ok {
+			current, err := decrypt(s.key, name, existing.Ciphertext)
+			if err != nil {
+				return fmt.Errorf("无法读取已有变量 %q", name)
+			}
+			if current != value {
+				return fmt.Errorf("变量 %q 已存在且值不同，请先在设置中修改或删除变量", name)
+			}
+			continue
+		}
+		encrypted, err := encrypt(s.key, name, value)
+		if err != nil {
+			return err
+		}
+		next[name] = entry{Ciphertext: encrypted, CreatedAt: now, UpdatedAt: now}
+		changed = true
+	}
+	if changed {
+		s.entries = next
+		if err := s.saveLocked(); err != nil {
+			s.entries = previous
+			return fmt.Errorf("无法持久化加密变量: %w", err)
+		}
+	}
+	if err := apply(); err != nil {
+		if changed {
+			s.entries = previous
+			if rollbackErr := s.saveLocked(); rollbackErr != nil {
+				return fmt.Errorf("导入失败且加密变量回滚失败，请检查存储: import: %v; rollback: %w", err, rollbackErr)
+			}
+		}
+		return err
+	}
+	return nil
+}
+
 func (s *Store) Delete(name string) error {
 	name = strings.TrimSpace(name)
 	s.mu.Lock()

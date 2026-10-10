@@ -37,6 +37,7 @@ func (a *App) handleMCPImport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	selected := make([]mcpcenter.Config, 0, len(preview.Candidates))
+	selectedSecrets := make(map[string]string)
 	requested := map[string]bool{}
 	if input.SelectedNames != nil {
 		if len(*input.SelectedNames) == 0 {
@@ -63,6 +64,16 @@ func (a *App) handleMCPImport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		selected = append(selected, c.config)
+		// Skipped MCPs must never create unused secrets.
+		if !(input.Conflict == mcpcenter.ConflictSkip && c.ExistingMCPID != "") {
+			for name, value := range c.secretValues {
+				if previous, ok := selectedSecrets[name]; ok && previous != value {
+					writeError(w, http.StatusBadRequest, fmt.Errorf("加密变量名称冲突 %q", name))
+					return
+				}
+				selectedSecrets[name] = value
+			}
+		}
 		delete(requested, key)
 	}
 	if len(requested) > 0 {
@@ -79,7 +90,14 @@ func (a *App) handleMCPImport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	result, err := a.core.ImportJSON(encoded, mcpcenter.ImportFormatCore, input.Conflict)
+	var result mcpcenter.ImportResult
+	err = a.upstreamSecrets.WithCreatedBatch(selectedSecrets, func() error {
+		imported, importErr := a.core.ImportJSON(encoded, mcpcenter.ImportFormatCore, input.Conflict)
+		if importErr == nil {
+			result = imported
+		}
+		return importErr
+	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return

@@ -17,7 +17,7 @@ func TestMCPDiscoveryDiagnosticDoesNotCaptureCredentialsOrArguments(t *testing.T
 	req.Header.Set("MCP-Protocol-Version", "2025-06-18")
 	req.Header.Set("User-Agent", "ChatGPT-Test")
 
-	diagnostic := newMCPDiscoveryDiagnostic(req, "demo")
+	diagnostic := newMCPProtocolDiagnostic(req)
 	data, err := json.Marshal(diagnostic.inputMeta)
 	if err != nil {
 		t.Fatal(err)
@@ -37,7 +37,7 @@ func TestMCPDiscoveryDiagnosticDoesNotCaptureCredentialsOrArguments(t *testing.T
 }
 
 func TestSummarizeMCPToolsListResponse(t *testing.T) {
-	diagnostic := &mcpDiscoveryDiagnostic{
+	diagnostic := &mcpProtocolDiagnostic{
 		status:     "success",
 		outputMeta: map[string]any{},
 	}
@@ -57,7 +57,7 @@ func TestSummarizeMCPToolsListResponse(t *testing.T) {
 }
 
 func TestSummarizeMCPToolsListJSONRPCError(t *testing.T) {
-	diagnostic := &mcpDiscoveryDiagnostic{
+	diagnostic := &mcpProtocolDiagnostic{
 		status:     "success",
 		outputMeta: map[string]any{},
 	}

@@ -20,7 +20,8 @@ func TestSummarySinceCountsFullWindowAndRecentErrors(t *testing.T) {
 		{RequestID: "ok", MCPID: "m1", ToolName: "read", StartedAt: now.Add(-3 * time.Hour), Status: "success"},
 		{RequestID: "err1", MCPID: "m2", ToolName: "call", StartedAt: now.Add(-2 * time.Hour), Status: "error", ErrorKind: "timeout"},
 		{RequestID: "err2", MCPID: "m2", ToolName: "call2", StartedAt: now.Add(-time.Hour), Status: "error", ErrorKind: "auth_failure"},
-		{RequestID: "diag", Source: "proxy-discovery", MCPID: "m2", ToolName: "mcp/tools/list", StartedAt: now.Add(-30 * time.Minute), Status: "error", ErrorKind: "proxy_http"},
+		{RequestID: "diag-old", Source: "proxy-discovery", MCPID: "m2", ToolName: "mcp/tools/list", StartedAt: now.Add(-30 * time.Minute), Status: "error", ErrorKind: "proxy_http"},
+		{RequestID: "diag-new", Source: "mcp-protocol", MCPID: "m2", ToolName: "mcp/server/discover", StartedAt: now.Add(-20 * time.Minute), Status: "error", ErrorKind: "proxy_http"},
 	}
 	for _, event := range events {
 		if err := store.Record(context.Background(), event); err != nil {

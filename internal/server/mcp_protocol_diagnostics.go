@@ -49,9 +49,8 @@ func (w *mcpDiagnosticResponseWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
-type mcpDiscoveryDiagnostic struct {
+type mcpProtocolDiagnostic struct {
 	requestID  string
-	ref        string
 	mcpID      string
 	rpcMethod  string
 	startedAt  time.Time
@@ -62,14 +61,13 @@ type mcpDiscoveryDiagnostic struct {
 	errorKind  string
 }
 
-func newMCPDiscoveryDiagnostic(r *http.Request, ref string) mcpDiscoveryDiagnostic {
+func newMCPProtocolDiagnostic(r *http.Request) mcpProtocolDiagnostic {
 	method := mcpRPCMethod(r)
 	if method == "" {
 		method = strings.ToLower(strings.TrimSpace(r.Method))
 	}
-	return mcpDiscoveryDiagnostic{
+	return mcpProtocolDiagnostic{
 		requestID: requestID(r),
-		ref:       ref,
 		rpcMethod: method,
 		startedAt: time.Now().UTC(),
 		status:    "success",
@@ -86,12 +84,12 @@ func newMCPDiscoveryDiagnostic(r *http.Request, ref string) mcpDiscoveryDiagnost
 	}
 }
 
-func (d *mcpDiscoveryDiagnostic) fail(kind string) {
+func (d *mcpProtocolDiagnostic) fail(kind string) {
 	d.status = "error"
 	d.errorKind = kind
 }
 
-func (d *mcpDiscoveryDiagnostic) record(ctx context.Context, a *App) {
+func (d *mcpProtocolDiagnostic) record(ctx context.Context, a *App) {
 	if a == nil || a.audit == nil {
 		return
 	}
@@ -100,7 +98,7 @@ func (d *mcpDiscoveryDiagnostic) record(ctx context.Context, a *App) {
 	authChannel := d.principal.AuthChannel
 	_ = a.audit.Record(ctx, mcpcenter.AuditEvent{
 		RequestID:     d.requestID,
-		Source:        "proxy-discovery",
+		Source:        "mcp-protocol",
 		PrincipalID:   principalID,
 		PrincipalName: principalName,
 		AuthChannel:   authChannel,
@@ -139,21 +137,21 @@ func mcpRPCMethod(r *http.Request) string {
 	return strings.TrimSpace(envelope.Method)
 }
 
-type mcpDiscoveryDiagnosticContextKey struct{}
+type mcpProtocolDiagnosticContextKey struct{}
 
-func withMCPDiscoveryDiagnostic(ctx context.Context, diagnostic *mcpDiscoveryDiagnostic) context.Context {
-	return context.WithValue(ctx, mcpDiscoveryDiagnosticContextKey{}, diagnostic)
+func withMCPProtocolDiagnostic(ctx context.Context, diagnostic *mcpProtocolDiagnostic) context.Context {
+	return context.WithValue(ctx, mcpProtocolDiagnosticContextKey{}, diagnostic)
 }
 
-func mcpDiscoveryDiagnosticFrom(ctx context.Context) *mcpDiscoveryDiagnostic {
+func mcpProtocolDiagnosticFrom(ctx context.Context) *mcpProtocolDiagnostic {
 	if ctx == nil {
 		return nil
 	}
-	diagnostic, _ := ctx.Value(mcpDiscoveryDiagnosticContextKey{}).(*mcpDiscoveryDiagnostic)
+	diagnostic, _ := ctx.Value(mcpProtocolDiagnosticContextKey{}).(*mcpProtocolDiagnostic)
 	return diagnostic
 }
 
-func summarizeMCPToolsListResponse(diagnostic *mcpDiscoveryDiagnostic, body []byte) {
+func summarizeMCPToolsListResponse(diagnostic *mcpProtocolDiagnostic, body []byte) {
 	if diagnostic == nil {
 		return
 	}

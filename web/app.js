@@ -1361,7 +1361,7 @@ function renderAudit(){
     const status=item.status==='success'?'<span class="status ok">成功</span>':'<span class="status bad">'+escapeHTML(item.error_kind||'失败')+'</span>';
     const keys=Array.isArray(item.input_meta?.keys)?item.input_meta.keys.join(', '):'';
     let summary=keys?('keys: '+keys):'无参数';
-    if(item.source==='proxy-discovery'){
+    if(item.source==='proxy-discovery'||item.source==='mcp-protocol'){
       const parts=[];
       if(item.input_meta?.rpc_method)parts.push(String(item.input_meta.rpc_method));
       if(item.output_meta?.http_status!==undefined)parts.push('HTTP '+String(item.output_meta.http_status));

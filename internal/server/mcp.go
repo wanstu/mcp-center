@@ -156,7 +156,7 @@ func (a *App) handleMCPCall(w http.ResponseWriter, r *http.Request) {
 
 func (a *App) handleMCPProxy(w http.ResponseWriter, r *http.Request) {
 	ref := r.PathValue("id")
-	diagnostic := newMCPDiscoveryDiagnostic(r, ref)
+	diagnostic := newMCPProtocolDiagnostic(r)
 	defer func() {
 		diagnostic.record(r.Context(), a)
 	}()
@@ -188,7 +188,7 @@ func (a *App) handleMCPProxy(w http.ResponseWriter, r *http.Request) {
 	diagnostic.inputMeta["auth_channel"] = principal.AuthChannel
 
 	r = r.WithContext(auditContextForMCP(r, principal))
-	r = r.WithContext(withMCPDiscoveryDiagnostic(r.Context(), &diagnostic))
+	r = r.WithContext(withMCPProtocolDiagnostic(r.Context(), &diagnostic))
 
 	cached := a.proxyCached(def.ID)
 	diagnostic.outputMeta["proxy_cached"] = cached

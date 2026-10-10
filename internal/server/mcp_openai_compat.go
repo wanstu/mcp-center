@@ -34,7 +34,7 @@ func withOpenAIToolOAuthMetadata(next http.Handler) http.Handler {
 		if !ok {
 			enriched = body
 		}
-		summarizeMCPToolsListResponse(mcpDiscoveryDiagnosticFrom(r.Context()), enriched)
+		summarizeMCPToolsListResponse(mcpProtocolDiagnosticFrom(r.Context()), enriched)
 		copyHTTPResponse(w, result, enriched)
 	})
 }

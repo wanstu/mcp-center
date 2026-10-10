@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestOAuthClientAdminCRUDAndNoDynamicRegistration(t *testing.T) {
+func TestOAuthClientAdminCRUDAndDynamicRegistration(t *testing.T) {
 	app := newTestApp(t)
 	handler := app.Handler()
 	session := bootstrapSession(t, app)
@@ -16,8 +16,8 @@ func TestOAuthClientAdminCRUDAndNoDynamicRegistration(t *testing.T) {
 	if metadata.Code != http.StatusOK {
 		t.Fatalf("metadata = %d %s", metadata.Code, metadata.Body.String())
 	}
-	if strings.Contains(metadata.Body.String(), "registration_endpoint") || strings.Contains(metadata.Body.String(), "/oauth/register") {
-		t.Fatalf("metadata must not advertise dynamic registration: %s", metadata.Body.String())
+	if !strings.Contains(metadata.Body.String(), `"registration_endpoint":"http://127.0.0.1:8610/oauth/register"`) {
+		t.Fatalf("metadata should advertise dynamic registration: %s", metadata.Body.String())
 	}
 
 	unauthorized := requestJSON(t, handler, http.MethodPost, "/api/oauth/clients", map[string]any{
@@ -64,12 +64,12 @@ func TestOAuthClientAdminCRUDAndNoDynamicRegistration(t *testing.T) {
 		"client_name":   "Dynamic Client",
 		"redirect_uris": []string{"https://client.example/dynamic"},
 	})
-	if legacy.Code == http.StatusCreated {
-		t.Fatalf("legacy dynamic registration is still open: %d %s", legacy.Code, legacy.Body.String())
+	if legacy.Code != http.StatusCreated {
+		t.Fatalf("dynamic registration failed: %d %s", legacy.Code, legacy.Body.String())
 	}
 	list = requestJSON(t, handler, http.MethodGet, "/api/oauth/clients", nil, session)
-	if strings.Contains(list.Body.String(), "Dynamic Client") {
-		t.Fatalf("legacy dynamic registration created a client: %s", list.Body.String())
+	if !strings.Contains(list.Body.String(), "Dynamic Client") {
+		t.Fatalf("registered client was not listed: %s", list.Body.String())
 	}
 
 	del := requestJSON(t, handler, http.MethodDelete, "/api/oauth/clients/"+created.Client.ID, nil, session)

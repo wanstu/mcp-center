@@ -34,6 +34,8 @@ label{display:grid;gap:6px;margin:12px 0;color:#526173;font-weight:650}input{bor
 <h1>授权 MCP 客户端</h1><p><strong>{{.ClientName}}</strong> 请求访问 MCP Center 中的一个 MCP 服务。</p>
 <div class="meta"><strong>资源</strong>{{.Resource}}</div>
 <div class="meta"><strong>权限</strong>{{.Scope}}</div>
+<div class="meta"><strong>客户端回调地址</strong>{{.RedirectURI}}</div>
+<div class="small">客户端名称由请求方自行声明。请确认回调地址属于你信任的应用，再允许访问。</div>
 <form method="post" action="/oauth/authorize">
 {{template "hidden" .}}
 <div class="actions"><button class="btn" name="decision" value="deny" type="submit">拒绝</button><button class="btn primary" name="decision" value="approve" type="submit">允许访问</button></div>
@@ -71,6 +73,7 @@ func (a *App) handleAuthorizationServerMetadata(w http.ResponseWriter, r *http.R
 		"issuer":                                         baseURL,
 		"authorization_endpoint":                         baseURL + "/oauth/authorize",
 		"token_endpoint":                                 baseURL + "/oauth/token",
+		"registration_endpoint":                          baseURL + "/oauth/register",
 		"revocation_endpoint":                            baseURL + "/oauth/revoke",
 		"response_types_supported":                       []string{"code"},
 		"grant_types_supported":                          []string{"authorization_code", "refresh_token"},

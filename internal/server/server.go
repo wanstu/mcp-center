@@ -55,6 +55,9 @@ type App struct {
 
 	oauthTestMu sync.Mutex
 	oauthTests  map[string]*oauthSelfTest
+
+	dcrMu      sync.Mutex
+	dcrBuckets map[string]registrationBucket
 }
 
 func New(cfg Config) (*App, error) {
@@ -185,6 +188,7 @@ func (a *App) Handler() http.Handler {
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource/{rest...}", a.handleProtectedResourceMetadata)
 	mux.HandleFunc("GET /oauth/authorize", a.handleOAuthAuthorizeGet)
 	mux.HandleFunc("POST /oauth/authorize", a.handleOAuthAuthorizePost)
+	mux.HandleFunc("POST /oauth/register", a.handleOAuthDynamicRegistration)
 	mux.HandleFunc("POST /oauth/token", a.handleOAuthToken)
 	mux.HandleFunc("POST /oauth/revoke", a.handleOAuthRevoke)
 	mux.HandleFunc("GET /oauth/test/callback", a.handleOAuthTestCallback)

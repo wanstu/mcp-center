@@ -39,7 +39,7 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - 配置更新 / 删除 / 导入后自动失效旧 Session
 - 管理员账号设置与修改密码；改密后旧 Session 全部失效并自动换发当前 Session
 - OAuth Client 管理：管理员显式创建 / 编辑 / 删除，Public Client + PKCE
-- OAuth Client 修改 / 删除会撤销已有授权码与 Token；不开放动态客户端注册
+- OAuth Client 修改 / 删除会撤销已有授权码与 Token；新增 RFC 7591 动态客户端注册（DCR），支持 ChatGPT 自动获取 Client ID，注册仍不授予资源访问权限。详见 `docs/OAUTH_CLIENT_REGISTRATION.md`
 - OAuth 端到端自测：临时 Client + PKCE → 浏览器授权 → Token → MCP tools/list → Refresh → Revoke → 自动清理
 - OAuth 服务默认可用，不再提供独立的服务开关；OAuth Discovery / Authorize / Token / Revoke / 自测和管理控制台统一遵守可选的 Host 域名/IP 白名单；OAuth Client、PKCE、Token 认证仍然独立执行
 - OAuth Token 主动撤销：`/oauth/revoke`，Access / Refresh Grant 一并失效

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	mcpcenter "github.com/wanstu/mcp-center-core"
 )
 
@@ -223,10 +224,11 @@ func (a *App) proxyHandler(ctx context.Context, id string) (http.Handler, error)
 
 	buildCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	handler, err := a.core.NewProxyHTTPHandler(buildCtx, id)
+	server, err := a.core.NewProxyServer(buildCtx, id)
 	if err != nil {
 		return nil, err
 	}
+	handler := newAuthenticatedProxyHTTPHandler(server)
 	a.proxyMu.Lock()
 	defer a.proxyMu.Unlock()
 	if existing := a.proxies[id]; existing != nil {
@@ -234,6 +236,19 @@ func (a *App) proxyHandler(ctx context.Context, id string) (http.Handler, error)
 	}
 	a.proxies[id] = handler
 	return handler, nil
+}
+
+func newAuthenticatedProxyHTTPHandler(server *mcp.Server) http.Handler {
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
+		return server
+	}, &mcp.StreamableHTTPOptions{
+		Stateless:                    true,
+		JSONResponse:                 true,
+		SessionTimeout:               5 * time.Minute,
+		PropagateRequestCancellation: true,
+		MaxRequestBodyBytes:          4 << 20,
+		DisableLocalhostProtection:   true,
+	})
 }
 
 func (a *App) invalidateProxy(id string) {

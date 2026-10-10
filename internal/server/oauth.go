@@ -163,7 +163,7 @@ func (a *App) handleOAuthAuthorizePost(w http.ResponseWriter, r *http.Request) {
 			_ = authorizeTemplate.Execute(w, view)
 			return
 		}
-		a.setSessionCookie(w, token)
+		a.setSessionCookie(w, r, token)
 		user = loggedIn
 		sessionErr = nil
 	}

@@ -281,9 +281,9 @@
           <div class="setting"><div><strong>Data Directory</strong><span id="settings-data-dir">读取中…</span></div><code>--data-dir</code></div>
           <div id="settings-base-url-warning" class="notice hidden">当前显示的是本机地址；公网 OAuth 连接建议使用 HTTPS 公开基础地址。</div>
           <div class="form-grid">
-            <label class="field span-2">公开 HTTPS 基础地址（OAuth / MCP）
-              <input id="settings-public-base-url" type="url" placeholder="https://cmcps.wanstu.cn" autocomplete="url" spellcheck="false">
-              <small>反向代理在内部使用 HTTP 时，请填写浏览器实际访问的 HTTPS 根地址，不包含 /mcp 路径。留空则自动识别；保存后立即生效，无需重启。启动参数 --base-url 优先级更高。</small>
+            <label class="field span-2">高级：公开 HTTPS 基础地址（手动覆盖）
+              <input id="settings-public-base-url" type="url" placeholder="https://mcp.example.com" autocomplete="url" spellcheck="false">
+              <small>通常无需填写。同机反向代理会自动识别外部 HTTPS；仅在多层代理等特殊部署下自动识别失败时手动覆盖，不包含 /mcp 路径。启动参数 --base-url 优先级更高。</small>
             </label>
           </div>
           <p id="settings-public-base-url-error" class="form-error hidden"></p>

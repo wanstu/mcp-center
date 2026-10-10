@@ -1076,7 +1076,7 @@ function renderAbout(){
   el('about-base-url').textContent=runtime.base_url||'读取中…';
   el('about-listen').textContent=runtime.listen_address||'读取中…';
   el('about-data-dir').textContent=runtime.data_dir||'读取中…';
-  const sources={'command-line':'启动参数 --base-url','settings':'设置中的公开 HTTPS 基础地址','automatic':'自动识别请求地址'};
+  const sources={'command-line':'启动参数 --base-url','settings':'手动覆盖的公开 HTTPS 地址','trusted-proxy':'同机可信反向代理自动识别','automatic':'自动识别请求地址'};
   el('about-base-source').textContent=sources[runtime.base_url_source]||'读取中…';
 }
 async function copyAboutDiagnostics(){

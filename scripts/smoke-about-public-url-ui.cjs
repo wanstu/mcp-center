@@ -8,6 +8,8 @@ for(const id of ['page-about','about-version','about-commit','about-platform','a
  assert.ok(html.includes('id="'+id+'"'),'missing UI element '+id);
 }
 assert.match(html,/data-page="about">关于/);
+assert.match(html,/placeholder="https:\/\/mcp\.example\.com"/);
+assert.ok(!html.includes('cmcps.wanstu.cn'),'product UI must not hard-code deployment-specific domains');
 const begin=js.indexOf('function renderAbout(){'),end=js.indexOf('async function saveSystemSettings(){',begin);
 assert.ok(begin>=0&&end>begin,'About/settings functions missing');
 function elFactory(){
@@ -48,6 +50,6 @@ assert.equal(el('about-base-url').textContent,'http://cmcps.wanstu.cn');
  assert.equal(calls[0].body.public_base_url,'https://cmcps.wanstu.cn');
  context.renderAbout();
  assert.equal(el('about-base-url').textContent,'https://cmcps.wanstu.cn');
- assert.equal(el('about-base-source').textContent,'设置中的公开 HTTPS 基础地址');
+ assert.equal(el('about-base-source').textContent,'手动覆盖的公开 HTTPS 地址');
  console.log('PASS About navigation markup, runtime fields, HTTPS settings validation and saved origin');
 })().catch(e=>{console.error(e);process.exitCode=1});

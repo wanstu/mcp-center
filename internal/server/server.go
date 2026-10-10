@@ -259,7 +259,7 @@ func (a *App) handleSetupRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	a.setSessionCookie(w, token)
+	a.setSessionCookie(w, r, token)
 	writeJSON(w, http.StatusCreated, map[string]any{"user": user})
 }
 
@@ -277,7 +277,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, err)
 		return
 	}
-	a.setSessionCookie(w, token)
+	a.setSessionCookie(w, r, token)
 	writeJSON(w, http.StatusOK, map[string]any{"user": user})
 }
 
@@ -320,10 +320,10 @@ func (a *App) currentUser(r *http.Request) (account.User, error) {
 	return a.account.Authenticate(cookie.Value)
 }
 
-func (a *App) setSessionCookie(w http.ResponseWriter, token string) {
+func (a *App) setSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: token, Path: "/", HttpOnly: true,
-		SameSite: http.SameSiteLaxMode, Secure: a.secure || a.publicBaseURLIsHTTPS(), MaxAge: 24 * 60 * 60,
+		SameSite: http.SameSiteLaxMode, Secure: a.secure || a.publicBaseURLIsHTTPS(r), MaxAge: 24 * 60 * 60,
 	})
 }
 

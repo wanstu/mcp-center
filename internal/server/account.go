@@ -21,6 +21,6 @@ func (a *App) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	a.setSessionCookie(w, token)
+	a.setSessionCookie(w, r, token)
 	writeJSON(w, http.StatusOK, map[string]any{"user": updated})
 }

@@ -170,7 +170,7 @@ func (a *App) handleMCPProxy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err)
 		return
 	}
-	handler.ServeHTTP(w, r)
+	withOpenAIToolOAuthMetadata(handler).ServeHTTP(w, r)
 }
 
 func (a *App) proxyHandler(ctx context.Context, id string) (http.Handler, error) {

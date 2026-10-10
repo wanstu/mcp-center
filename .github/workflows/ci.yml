@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CORE_REF: v0.1.1
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout MCP Center
+        uses: actions/checkout@v7.0.1
+        with:
+          path: mcp-center
+
+      - name: Checkout MCP Center Core
+        uses: actions/checkout@v7.0.1
+        with:
+          repository: wanstu/mcp-center-core
+          ref: ${{ env.CORE_REF }}
+          path: mcp-center-core
+
+      - name: Set up Go
+        uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: mcp-center/go.mod
+          cache: true
+          cache-dependency-path: |
+            mcp-center/go.sum
+            mcp-center-core/go.sum
+
+      - name: Set up Node
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Test Core
+        working-directory: mcp-center-core
+        run: go test ./... -count=1 -timeout 60s
+
+      - name: Test Center
+        working-directory: mcp-center
+        run: go test ./... -count=1 -timeout 60s
+
+      - name: Vet Center
+        working-directory: mcp-center
+        run: go vet ./...
+
+      - name: UI smoke
+        working-directory: mcp-center
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check web/app.js
+          node scripts/smoke-auth-form-ui.cjs
+          node scripts/smoke-about-public-url-ui.cjs
+          node scripts/smoke-mcp-import-ui.cjs
+          node scripts/smoke-scheduled-probe-ui.cjs

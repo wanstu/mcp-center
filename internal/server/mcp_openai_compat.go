@@ -40,23 +40,24 @@ func withOpenAIToolOAuthMetadata(next http.Handler) http.Handler {
 }
 
 func isMCPToolsListRequest(r *http.Request) bool {
+	return mcpJSONRPCMethod(r) == "tools/list"
+}
+
+func mcpJSONRPCMethod(r *http.Request) string {
 	if r == nil || r.Method != http.MethodPost || r.Body == nil {
-		return false
+		return ""
 	}
 	body, err := readAndRestoreBody(r)
-	if err != nil {
-		return false
-	}
-	if len(bytes.TrimSpace(body)) == 0 {
-		return false
+	if err != nil || len(bytes.TrimSpace(body)) == 0 {
+		return ""
 	}
 	var envelope struct {
 		Method string `json:"method"`
 	}
 	if err := json.Unmarshal(body, &envelope); err != nil {
-		return false
+		return ""
 	}
-	return envelope.Method == "tools/list"
+	return envelope.Method
 }
 
 func enrichOpenAIToolOAuthMetadata(body []byte) ([]byte, bool) {

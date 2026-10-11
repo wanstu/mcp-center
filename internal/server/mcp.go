@@ -196,12 +196,12 @@ func (a *App) handleMCPProxy(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		diagnostic.fail("proxy_build")
 		diagnostic.outputMeta["http_status"] = http.StatusBadGateway
-		writeError(w, http.StatusBadGateway, err)
+		writePublicMCPUpstreamUnavailable(w)
 		return
 	}
 
 	tracked := &mcpDiagnosticResponseWriter{ResponseWriter: w}
-	withOpenAIToolOAuthMetadata(handler).ServeHTTP(tracked, r)
+	withPublicMCPErrorSanitization(withOpenAIToolOAuthMetadata(handler)).ServeHTTP(tracked, r)
 	if tracked.status == 0 {
 		tracked.status = http.StatusOK
 	}

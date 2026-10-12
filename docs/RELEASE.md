@@ -15,7 +15,7 @@
   - 正式产物只使用 GitHub Runner 从 tag 源码重新构建的结果，不上传开发机 `dist/` 目录中的二进制。
   - 已存在的 Release 不允许覆盖附件；同一 tag 的正式产物发布后保持不可变，需要修复时发布新版本号。
 
-当前 Center 使用 MCP Center Core `v0.1.1`。本地 `go.mod` 仍保留 sibling `replace ../mcp-center-core` 以方便 Center/Core 联调；GitHub Actions 会显式 checkout `v0.1.1` 到 sibling 路径，因此 CI 构建不依赖某台开发机的目录内容。
+当前 Center 使用 MCP Center Core `v0.1.2-rc.1`。`go.mod` 直接引用已发布 Core `v0.1.2-rc.1`，不使用本地 `replace`。GitHub Actions 同时 checkout Core 对应 tag 做双项目测试和自包含源码包，正式构建不依赖开发机路径。
 
 ## 本地发布验证
 
@@ -103,7 +103,7 @@ dist/<version>/
 2. 使用 `Run workflow`。
 3. `ref=v0.1.3`
 4. `version=v0.1.3`
-5. `core_ref=v0.1.1`
+5. `core_ref=v0.1.2-rc.1`
 
 workflow 会验证版本 tag 必须指向 checkout 的源码 commit，然后重新构建。不会读取或上传开发机上的历史 `dist/v0.1.3`。
 

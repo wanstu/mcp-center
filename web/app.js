@@ -419,13 +419,14 @@ function openMCPDialog(m=null){
   el('mcp-dialog').showModal();
 }
 function updateTransportFields(){
+  el('mcp-endpoint').placeholder=el('mcp-transport').value==='sse'?'https://example.com/sse':'https://example.com/mcp';
   const stdio=el('mcp-transport').value==='stdio';
   document.querySelectorAll('.stdio-only').forEach(n=>n.classList.toggle('hidden',!stdio));
   document.querySelectorAll('.http-only').forEach(n=>n.classList.toggle('hidden',stdio));
   updateAuthFields();
 }
 function updateAuthFields(){
-  const show=el('mcp-transport').value==='streamable-http'&&el('mcp-auth').value==='headers';
+  const show=el('mcp-transport').value!=='stdio'&&el('mcp-auth').value==='headers';
   document.querySelectorAll('.header-auth-only').forEach(n=>n.classList.toggle('hidden',!show));
 }
 function updateScheduledProbeFields(){
@@ -622,7 +623,7 @@ async function exportMCPs(format){
     let doc;
     if(format==='mcpServers'){
       const servers={};
-      for(const m of mockData.mcps){servers[m.name]=m.transport==='stdio'?{command:m.executable,args:m.args||[],env:m.env_refs||undefined}:{url:m.endpoint,headers:m.header_refs||undefined}}
+      for(const m of mockData.mcps){servers[m.name]=m.transport==='stdio'?{command:m.executable,args:m.args||[],env:m.env_refs||undefined}:{type:m.transport==='sse'?'sse':'streamable-http',url:m.endpoint,headers:m.header_refs||undefined}}
       doc={mcpServers:servers};
     }else{
       doc={version:1,mcps:mockData.mcps.map(({id,created_at,updated_at,...m})=>m)};

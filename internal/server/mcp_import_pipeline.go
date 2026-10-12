@@ -206,8 +206,8 @@ func normalizeImportedServer(format, name string, value any, convert bool) mcpIm
 	}
 	typ, _ := obj["type"].(string)
 	norm := strings.ToLower(strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(typ), "-", ""), "_", ""))
-	if norm == "sse" {
-		item.Errors = append(item.Errors, issue("unsupported_transport", "type", "不支持旧 SSE 传输，请改用 Streamable HTTP"))
+	if norm != "" && norm != "http" && norm != "streamablehttp" && norm != "stdio" && norm != "sse" && norm != "local" && norm != "remote" {
+		item.Errors = append(item.Errors, issue("unsupported_transport", "type", "不支持的 MCP 传输类型"))
 		return item
 	}
 	var execString string
@@ -223,7 +223,7 @@ func normalizeImportedServer(format, name string, value any, convert bool) mcpIm
 			}
 			execString = command[0]
 			args = command[1:]
-		case "remote":
+		case "remote", "sse":
 			urlValue, _ = obj["url"].(string)
 		default:
 			item.Errors = append(item.Errors, issue("unsupported_transport", "type", "OpenCode 必须指定 local 或 remote"))
@@ -255,6 +255,9 @@ func normalizeImportedServer(format, name string, value any, convert bool) mcpIm
 	}
 	if isHTTP && !isStdio {
 		item.config.Transport = mcpcenter.TransportStreamableHTTP
+		if norm == "sse" {
+			item.config.Transport = mcpcenter.TransportSSE
+		}
 		item.config.Endpoint = urlValue
 		item.config.HeaderRefs = normalizeImportedRefs(&item, name, "headers", obj["headers"], convert)
 		if len(item.config.HeaderRefs) > 0 {

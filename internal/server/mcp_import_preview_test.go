@@ -115,7 +115,7 @@ func TestMCPImportADMBatchAtomicAndSafety(t *testing.T) {
 	app := newTestApp(t)
 	handler := app.Handler()
 	cookie := bootstrapSession(t, app)
-	content := `{"mcpServers":{"first":{"command":"node"},"bad":{"type":"sse","url":"https://example.org/sse"},"second":{"command":"python"}}}`
+	content := `{"mcpServers":{"first":{"command":"node"},"bad":{"type":"websocket","url":"https://example.org/ws"},"second":{"command":"python"}}}`
 	p, err := app.parseMCPImport(mcpImportRequest{Format: "auto", Content: content})
 	if err != nil {
 		t.Fatal(err)

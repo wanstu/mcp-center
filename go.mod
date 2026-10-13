@@ -2,7 +2,7 @@ module github.com/wanstu/mcp-center
 
 go 1.26.0
 
-require github.com/wanstu/mcp-center-core v0.1.2-rc.1
+require github.com/wanstu/mcp-center-core v0.1.2
 
 require golang.org/x/tools v0.49.0 // indirect
 

@@ -234,6 +234,39 @@ function scheduledProbeSummary(m){
   }
   return '<br><small class="muted">'+escapeHTML(parts.join(' · '))+'</small>';
 }
+// Derive user-actionable diagnostics without rendering raw upstream errors.
+// Upstream errors may contain URL query credentials or access tokens.
+// Display actionable classifications, never raw upstream errors that could
+// contain access tokens, credentials, or URL query parameters.
+function mcpProbeDiagnostic(health,runtime){
+  const raw=String(runtime?.last_error||'');
+  const kind=String(runtime?.state==='error'&&runtime?.error_kind||health?.error_kind||runtime?.error_kind||'');
+  const match=raw.match(/\b(?:HTTP\/\d(?:\.\d)?\s*|status(?:\s+code)?\s*[:=]?\s*)(400|401|403|404|405|406|408|415|422|426|429|500|501|502|503|504)\b/i)
+    ||raw.match(/\b(400|401|403|404|405|406|408|415|422|426|429|500|501|502|503|504)\b/);
+  const status=match?.[1]||'';
+  const descriptions={
+    auth_failure:['鉴权失败','上游拒绝认证。检查 Know Me 令牌是否有效、是否重复填写 Bearer 前缀，以及变量引用是否正确。'],
+    timeout:['探测超时','上游未在规定时间内完成连接；检查网络、服务响应或增加单次探测超时。'],
+    connection_refused:['连接被拒绝','目标服务没有接受连接；检查地址、服务状态及端口。'],
+    connection_failed:['协议连接失败','请求未完成 MCP 握手；检查服务端日志、协议版本、反向代理及 HTTP 响应。']
+  };
+  let detail=descriptions[kind]||['连接失败','连接未成功，请查看错误类型或 MCP Server 日志。'];
+  if(status==='400')detail=['HTTP 400：请求无效','上游认为 MCP 初始化请求不合法，检查协议版本、HTTP 请求头和反向代理。'];
+  else if(status==='401')detail=['HTTP 401：未授权','上游拒绝认证。确认变量值是原始 km_ 令牌，没有 Bearer 前缀，且令牌没有吊销。'];
+  else if(status==='403')detail=['HTTP 403：禁止访问','上游拒绝请求；检查 Origin 校验、令牌权限及代理配置。'];
+  else if(status==='404')detail=['HTTP 404：地址不存在','检查 /mcp 路径和部署形态；Next.js Docker 版本不提供 Know Me MCP。'];
+  else if(status==='415')detail=['HTTP 415：媒体类型不支持','检查 MCP JSON 的 Content-Type 和反向代理转发。'];
+  else if(status==='406')detail=['HTTP 406：响应格式不支持','检查 MCP Accept 请求头和上游协议版本。'];
+  else if(status==='422'||status==='426')detail=['HTTP '+status+'：请求不兼容','上游拒绝了请求格式或协议版本，请检查 MCP 客户端与服务端版本。'];
+  else if(status==='405')detail=['HTTP 405：请求方法不允许','目标地址或反向代理不支持所需的 MCP HTTP 请求方法。'];
+  else if(status==='408'||status==='504')detail=['HTTP '+status+'：请求超时','检查上游响应时间、反向代理和探测超时设置。'];
+  else if(status==='429')detail=['HTTP 429：请求受限','上游触发速率限制，请降低探测频率或检查限流设置。'];
+  else if(status==='500'||status==='502'||status==='503')detail=['HTTP '+status+'：上游服务错误','上游或网关返回服务端错误，请检查服务和反向代理日志。'];
+  else if(/x509|certificate|tls handshake|tls:/.test(raw.toLowerCase()))detail=['TLS / 证书错误','HTTPS 证书校验或 TLS 握手失败，请检查证书链、域名与反向代理。'];
+  else if(/(?:unexpected|invalid).*(?:content.type|json|html)|text\/html/i.test(raw))detail=['响应格式错误','上游可能返回了 HTML、登录页或非 MCP JSON，请检查地址与反向代理。'];
+  else if(/\beof\b|connection reset/i.test(raw))detail=['连接被中断','上游或反向代理提前关闭连接，请检查代理超时和服务日志。'];
+  return {title:detail[0],explanation:detail[1],kind:kind||'unknown',status};
+}
 function renderMCPs(){
   const q=el('mcp-search').value.trim().toLowerCase();
   const statusFilter=el('mcp-status-filter')?.value||'all';
@@ -250,6 +283,12 @@ function renderMCPs(){
     else if(statusKey==='error')status='<span class="status bad">异常</span>';
     else if(statusKey==='disabled')status='<span class="status warn">已禁用</span>';
     status+=scheduledProbeSummary(m);
+    if(statusKey==='error'){
+      const detail=mcpProbeDiagnostic(health,runtime);
+      status+='<div class="mcp-probe-reason"><strong>'+escapeHTML(detail.title)+'</strong>'
+        +'<details class="mcp-probe-help"><summary>原因及处理建议</summary><small>'+escapeHTML(detail.explanation)+'</small></details>'
+        +'<small class="muted">错误类型：'+escapeHTML(detail.kind)+(detail.status?' · HTTP '+escapeHTML(detail.status):'')+'</small></div>';
+    }
     const tools=m.disabled?'—':(state.tools.get(m.id)?.length??health?.tools?.length??runtime?.tool_count??'—');
     const where=m.transport==='stdio'?escapeHTML([m.executable,...(m.args||[])].join(' ')):escapeHTML(m.endpoint||'');
     const runtimeActions=m.disabled?'':('<button class="button small" data-op="probe">刷新</button><button class="button small" data-op="test">测试</button>'+(runtime?.state==='connected'?'<button class="button ghost small" data-op="disconnect">断开</button> ':''));
@@ -316,8 +355,20 @@ function renderDashboard(){
   }
 }
 async function probeMCP(id){
-  try{toast('正在刷新…');const result=await api('/api/mcps/'+encodeURIComponent(id)+'/probe',{method:'POST'});state.health.set(id,result);if(result.tools)state.tools.set(id,result.tools);await loadRuntimeStatuses();toast(result.state==='healthy'?'刷新成功':'刷新完成：'+result.state)}
-  catch(error){state.health.set(id,{state:'error',message:error.message});await loadRuntimeStatuses().catch(()=>{});renderMCPs();toast('刷新失败：'+error.message)}
+  try{
+    toast('正在刷新…');
+    const result=await api('/api/mcps/'+encodeURIComponent(id)+'/probe',{method:'POST'});
+    state.health.set(id,result);
+    if(result.tools)state.tools.set(id,result.tools);
+    await loadRuntimeStatuses();
+    const detail=mcpProbeDiagnostic(result,state.runtime.get(id));
+    toast(result.state==='healthy'?'刷新成功':'刷新失败：'+detail.title+'（详见状态栏）');
+  }catch(error){
+    state.health.set(id,{state:'error',message:error.message});
+    await loadRuntimeStatuses().catch(()=>{});
+    renderMCPs();
+    toast('刷新失败：'+error.message);
+  }
 }
 async function probeAll(){for(const m of state.mcps)await probeMCP(m.id)}
 function formatKVMap(input){

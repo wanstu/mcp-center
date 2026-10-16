@@ -68,3 +68,4 @@ jobs:
           node scripts/smoke-mcp-import-ui.cjs
           node scripts/smoke-scheduled-probe-ui.cjs
           node scripts/probe-diagnostics-smoke.cjs
+          node scripts/smoke-sse-transport.cjs

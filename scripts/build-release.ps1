@@ -45,6 +45,10 @@ try {
     go test ./... -count=1 -timeout 30s
     if ($LASTEXITCODE -ne 0) { throw "mcp-center go test failed" }
 
+    Write-Host "Checking legacy SSE protocol availability..."
+    & node (Join-Path $PSScriptRoot "smoke-sse-transport.cjs")
+    if ($LASTEXITCODE -ne 0) { throw "SSE transport regression detected; refusing release" }
+
     Write-Host "Testing scheduled probe UI..."
     & node (Join-Path $PSScriptRoot "smoke-scheduled-probe-ui.cjs")
     if ($LASTEXITCODE -ne 0) { throw "Scheduled probe UI smoke failed" }

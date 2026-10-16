@@ -54,7 +54,7 @@ MCP Center 是 `mcp-center-core` 的独立 Web 控制程序。
 - 工具测试参数助手：从 inputSchema 自动生成最小 JSON 示例，并提供 Form / JSON 双模式
 - 工具测试状态按 MCP + Tool 保留参数、模式和最后一次运行结果，切换后可恢复
 
-最新正式版本：`v0.1.3`。该版本新增 OAuth 动态客户端注册、跨客户端 MCP 导入与自动加密变量、HTTPS 反向代理兼容、MCP 协议诊断和定时健康探测；正式 Release 已切换为 GitHub Actions 从 tag 源码构建并发布。MCP Center Core 使用 `v0.1.1`，Kit Go Module 与 Linux Debian 打包器统一使用 `v0.11.3`。
+最新正式版本：`v0.1.3`。该版本新增 OAuth 动态客户端注册、跨客户端 MCP 导入与自动加密变量、HTTPS 反向代理兼容、MCP 协议诊断和定时健康探测；正式 Release 已切换为 GitHub Actions 从 tag 源码构建并发布。MCP Center Core 稳定版为 `v0.1.1`；即将发布的 SSE RC 使用 `v0.1.2`，Kit Go Module 与 Linux Debian 打包器统一使用 `v0.11.3`。
 
 ## 开源许可证
 
@@ -119,7 +119,7 @@ assets.go             Web + Desktop Kit 资源挂载
 
 ## 依赖与源码分发
 
-- `mcp-center-core` 保持独立项目边界；本地联调通过 `replace ../mcp-center-core` 使用同级源码。
+- `mcp-center-core` 保持独立项目边界；正式构建直接依赖已发布的 Core 版本，不使用本地 `replace`。
 - `wails-desktop-kit` 的 Go Module 和 Linux `.deb` 打包工具统一使用正式 `v0.11.3`。打包直接运行该 Go Module 的 `cmd/desktopkit`，不依赖本地 Kit 工作区或双重版本设置；manifest 记录 Kit module version 和 go.sum 哈希。
 - 正式 GitHub Release 由 GitHub Actions 从 tag 源码重新构建，不使用开发机 `dist/` 产物；会额外生成 `mcp-center-<version>-source.zip`，其中包含 Center、Core 与完整 vendor。
 - source bundle 会在 `GOPROXY=off`、隐藏 Core sibling 的条件下执行 `go test -mod=vendor ./...` 与 `go build -mod=vendor`，确认程序可离线构建。Linux `.deb` 统一使用 Kit `v0.11.3` 的 Go Module 打包器。

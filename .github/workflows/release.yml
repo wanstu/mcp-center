@@ -58,6 +58,11 @@ jobs:
           if (-not $tagCommit -or $tagCommit -ne $headCommit) {
             throw "VERSION $env:VERSION does not point to checked out commit $headCommit"
           }
+          git fetch origin master
+          git merge-base --is-ancestor $tagCommit origin/master
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release tag is not merged into master. Refusing to publish a detached feature branch."
+          }
 
       - name: Set up Go
         uses: actions/setup-go@v7.0.0

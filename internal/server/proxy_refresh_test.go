@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -84,6 +85,21 @@ func assertRefreshedToolsAndInvalidatedProxy(t *testing.T, app *App, id string) 
 	if len(tools) != 2 {
 		t.Fatalf("expected refreshed upstream tools, got %d: %#v", len(tools), tools)
 	}
+}
+
+func TestPublicToolsListRequestRefreshesUpstreamBeforeServing(t *testing.T) {
+	app := newTestApp(t)
+	upstream, upstreamHTTP := newMutableToolUpstream(t)
+	def := addProxyRefreshTestMCP(t, app, upstreamHTTP.URL)
+	seedProxySnapshot(t, app, def.ID)
+
+	addSecondTool(upstream)
+	req := httptest.NewRequest(http.MethodPost, "/mcp/"+def.Name, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+	if err := app.refreshProxyToolsForRequest(context.Background(), def.ID, req); err != nil {
+		t.Fatal(err)
+	}
+
+	assertRefreshedToolsAndInvalidatedProxy(t, app, def.ID)
 }
 
 func TestRuntimeRefreshInvalidatesPublicProxyToolSnapshot(t *testing.T) {

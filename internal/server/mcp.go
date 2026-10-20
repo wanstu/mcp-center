@@ -195,6 +195,13 @@ func (a *App) handleMCPProxy(w http.ResponseWriter, r *http.Request) {
 	r = r.WithContext(auditContextForMCP(r, principal))
 	r = r.WithContext(withMCPProtocolDiagnostic(r.Context(), &diagnostic))
 
+	if err := a.refreshProxyToolsForRequest(r.Context(), def.ID, r); err != nil {
+		diagnostic.fail("proxy_refresh")
+		diagnostic.outputMeta["http_status"] = http.StatusBadGateway
+		writePublicMCPUpstreamUnavailable(w)
+		return
+	}
+
 	cached := a.proxyCached(def.ID)
 	diagnostic.outputMeta["proxy_cached"] = cached
 	handler, err := a.proxyHandler(r.Context(), def.ID)
@@ -222,6 +229,22 @@ func (a *App) proxyCached(id string) bool {
 	a.proxyMu.Lock()
 	defer a.proxyMu.Unlock()
 	return a.proxies[id] != nil
+}
+
+func (a *App) refreshProxyToolsForRequest(ctx context.Context, id string, r *http.Request) error {
+	if !isMCPToolsListRequest(r) {
+		return nil
+	}
+	refreshCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	if _, err := a.core.Refresh(refreshCtx, id); err != nil {
+		return err
+	}
+	// A public mcp.Server contains a snapshot of the tool registry. ChatGPT
+	// refreshes an app by calling tools/list, so rebuild that snapshot from the
+	// freshly queried upstream list before serving this request.
+	a.invalidateProxy(id)
+	return nil
 }
 
 func (a *App) proxyHandler(ctx context.Context, id string) (http.Handler, error) {

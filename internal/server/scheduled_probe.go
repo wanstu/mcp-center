@@ -101,6 +101,11 @@ func (a *App) runScheduledProbePass(ctx context.Context, now time.Time) {
 
 func (a *App) runScheduledProbe(ctx context.Context, id string) {
 	status, err := a.core.Probe(ctx, id)
+	if err == nil && status.State == mcpcenter.HealthHealthy {
+		// Scheduled health checks also refresh tools. Invalidate the separately
+		// cached public proxy, otherwise its mcp.Server keeps the old tool set.
+		a.invalidateProxy(id)
+	}
 	if ctx.Err() != nil {
 		a.scheduledProbeMu.Lock()
 		if state := a.scheduledProbes[id]; state != nil {

@@ -28,6 +28,10 @@ func (a *App) handleRuntimeRefresh(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, err)
 		return
 	}
+	// The public proxy server snapshots the upstream tool registry when it is
+	// built. Refreshing the runtime cache alone would leave ChatGPT seeing the
+	// old tools/list result, so force the next public request to rebuild it.
+	a.invalidateProxy(id)
 	status, err := a.core.RuntimeStatus(id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)

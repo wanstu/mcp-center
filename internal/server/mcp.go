@@ -102,6 +102,11 @@ func (a *App) handleMCPProbe(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	id := r.PathValue("id")
 	status, err := a.core.Probe(ctx, id)
+	if err == nil && status.State == mcpcenter.HealthHealthy {
+		// Probe refreshes the upstream tool cache; drop the public proxy snapshot
+		// so the next ChatGPT tools/list request observes the refreshed registry.
+		a.invalidateProxy(id)
+	}
 	a.recordScheduledProbeResult(id, status, err, true)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err)

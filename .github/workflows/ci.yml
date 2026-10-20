@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  CORE_REF: v0.1.1
+  CORE_REF: v0.1.2
 
 jobs:
   test:
@@ -67,3 +67,5 @@ jobs:
           node scripts/smoke-about-public-url-ui.cjs
           node scripts/smoke-mcp-import-ui.cjs
           node scripts/smoke-scheduled-probe-ui.cjs
+          node scripts/probe-diagnostics-smoke.cjs
+          node scripts/smoke-sse-transport.cjs

@@ -453,11 +453,11 @@
 
   <dialog id="mcp-dialog" class="dialog">
     <form id="mcp-form" method="dialog">
-      <div class="dialog-head"><div><h2 id="mcp-dialog-title">添加 MCP</h2><p>支持 Streamable HTTP 和 stdio。</p></div><button type="button" class="icon-button" data-action="close-dialog">×</button></div>
+      <div class="dialog-head"><div><h2 id="mcp-dialog-title">添加 MCP</h2><p>支持 Streamable HTTP、SSE（旧版）和 stdio。</p></div><button type="button" class="icon-button" data-action="close-dialog">×</button></div>
       <input id="mcp-id" type="hidden">
       <div class="form-grid">
         <label class="field">名称<input id="mcp-name" required></label>
-        <label class="field">Transport<select id="mcp-transport"><option value="streamable-http">Streamable HTTP</option><option value="stdio">stdio</option></select></label>
+        <label class="field">Transport<select id="mcp-transport"><option value="streamable-http">Streamable HTTP</option><option value="sse">SSE（旧版）</option><option value="stdio">stdio</option></select></label>
         <label class="check span-2"><input id="mcp-enabled" type="checkbox" checked> 启用服务</label>
         <label class="check span-2"><input id="mcp-health-enabled" type="checkbox"> 启用定时探测</label>
         <label class="field scheduled-probe-only hidden">探测间隔（秒）
